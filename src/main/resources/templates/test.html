@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Real-Time Game Rooms</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+</head>
+<body>
+<h1>Real-Time Game Rooms</h1>
+
+<input type="text" id="username" placeholder="Enter your username">
+<br><br>
+<button onclick="createRoom()">Create & Join Room</button>
+<br><br>
+<input type="text" id="roomId" placeholder="Enter Room ID">
+<button onclick="joinRoom()">Join Existing Room</button>
+<br><br>
+<hr>
+<h3 id="current-room-display">Status: Not in a room</h3>
+<input type="text" id="message" placeholder="Enter your message">
+<button onclick="sendMessage()">Send to Room</button>
+<br>
+<div id="notifications"></div>
+
+<script>
+    let stompClient = null;
+    let currentSubscription = null;
+    let activeRoomId = null;
+
+    // Connects globally to the server on page load
+    function connect() {
+        const socket = new SockJS('http://localhost:8080/ws');
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect({}, function (frame) {
+            console.log('Connected to WebSocket server');
+        }, function (error) {
+            console.error('WebSocket connection error: ' + error);
+        });
+    }
+
+    // Helper to extract username and apply fallback if blank
+    function getCleanedUsername() {
+        let username = document.getElementById('username').value.trim();
+        return username === "" ? "anon" : username;
+    }
+
+    // STEP 1: Hit REST API to create room, then immediately join it
+    function createRoom() {
+        fetch('http://localhost:8080/api/rooms/create', {
+            method: 'POST'
+        })
+            .then(response => response.text())
+            .then(roomId => {
+                console.log('Room created with ID:', roomId);
+                // Autofill the room ID input box for visibility
+                document.getElementById('roomId').value = roomId;
+
+                // Execute the room subscription and join announcement
+                setupRoomConnection(roomId);
+            })
+            .catch(error => console.error('Error creating room:', error));
+    }
+
+    // Manual join triggered by clicking the Join button
+    function joinRoom() {
+        const roomId = document.getElementById('roomId').value.trim();
+        if (!roomId) {
+            alert("Please enter a valid Room ID");
+            return;
+        }
+        setupRoomConnection(roomId);
+    }
+
+    // Handles the room subscription and signals the backend room.join endpoint
+    function setupRoomConnection(roomId) {
+        if (!stompClient || !stompClient.connected) {
+            console.error('Cannot join room: WebSocket is not connected.');
+            return;
+        }
+
+        // Leave previous room subscription if switching rooms
+        if (currentSubscription) {
+            currentSubscription.unsubscribe();
+        }
+
+        activeRoomId = roomId;
+        document.getElementById('current-room-display').textContent = "Status: In Room " + roomId;
+
+        // 1. Subscribe to the specific room's message topic channel
+        currentSubscription = stompClient.subscribe('/topic/' + roomId, function (messagePayload) {
+            showNotification(messagePayload);
+        });
+
+        // 2. Alert the backend controller that the user has joined this room
+        const username = getCleanedUsername();
+        stompClient.send('/app/room.join/' + roomId, {}, username);
+        console.log(`Sent join alert for user "${username}" to room ${roomId}`);
+    }
+
+    function sendMessage() {
+        if (!activeRoomId) {
+            console.error('You must join a room before sending a message.');
+            return;
+        }
+
+        const messageText = document.getElementById('message').value;
+        const username = getCleanedUsername();
+        const now = new Date();
+
+        if (stompClient && stompClient.connected) {
+            // Adapt this payload structure to match your exact backend chat DTO mapping
+            stompClient.send('/app/send/' + activeRoomId, {}, JSON.stringify({
+                user: username,
+                message: messageText,
+                timestamp: now.toISOString().split('T')[0]
+            }));
+
+            document.getElementById('message').value = ""; // Clear input after send
+        }
+    }
+
+    function showNotification(payload) {
+        // Safe check: handles plain string text alerts as well as JSON objects
+        let displayText = "";
+        try {
+            const data = JSON.parse(payload.body);
+            displayText = (data.user || "System") + ": " + (data.message || "");
+        } catch(e) {
+            displayText = payload.body; // Raw text fallback (e.g. "Aditya Joined!!")
+        }
+
+        const notifications = document.getElementById('notifications');
+        const notification = document.createElement('p');
+        notification.textContent = displayText;
+        notifications.appendChild(notification);
+    }
+
+    // Run connection process on start
+    connect();
+</script>
+</body>
+</html>
