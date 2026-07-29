@@ -13,9 +13,9 @@ public class ClientConfig {
 
     @Bean
     public RestClient restTemplate() {
-        System.out.println("tmdbReadKey: " + tmdbReadKey);
+
         return RestClient.builder()
-                .baseUrl("https://api.themoviedb.org/3/discover/movie?include_adult=false&include_video=false&language=en-US&page=1&sort_by=popularity.desc")
+                .baseUrl("https://api.themoviedb.org/3")
                 .defaultHeader("Authorization", "Bearer " + tmdbReadKey)
                 .defaultHeader("Accept", "application/json")
                 .build();

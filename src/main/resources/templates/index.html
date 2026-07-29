@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Real-Time Game Rooms</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f9f9f9; }
+        #game-view { display: none; }
+        .dashboard-container { display: flex; gap: 30px; margin-top: 20px; }
+        .main-content { flex: 2; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .chat-sidebar { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; height: 450px; }
+
+        /* Sub-Views */
+        .phase-sub-view { display: none; }
+
+        #notifications { flex-grow: 1; border: 1px solid #eee; padding: 10px; overflow-y: auto; margin-bottom: 10px; border-radius: 4px; background: #fafafa; }
+        .chat-input-row { display: flex; gap: 5px; }
+        .chat-input-row input { flex-grow: 1; padding: 8px; }
+
+        .search-container { max-width: 400px; margin-top: 15px; position: relative; }
+        input[type="text"], textarea { padding: 8px; font-size: 14px; width: 100%; box-sizing: border-box; }
+        textarea { resize: vertical; height: 80px; margin-top: 5px; }
+
+        .results-list { list-style: none; padding: 0; margin-top: 5px; border: 1px solid #ccc; display: none; position: absolute; background: white; width: 100%; box-shadow: 0px 4px 6px rgba(0,0,0,0.1); z-index: 10; max-height: 200px; overflow-y: auto; }
+        .results-list li { padding: 8px 12px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; align-items: center; gap: 12px; }
+        .results-list li:hover { background-color: #f0f0f0; }
+        .results-list img { width: 40px; height: 60px; object-fit: cover; border-radius: 4px; }
+
+        .admin-panel { margin-top: 20px; padding: 10px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; display: none; }
+
+        /* Interactive Guessing Cards Layout */
+        .description-card { background: #fdfdfd; border: 1px solid #e0e0e0; border-left: 5px solid #00BFFF; padding: 15px; margin-bottom: 15px; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
+        .description-card:hover { background: #f5f5f5; }
+        .guess-drawer { display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #eee; }
+    </style>
+</head>
+<body>
+
+<div id="login-view">
+    <h1>Welcome to Project Stylus</h1>
+    <p>Please enter a username to begin:</p>
+    <div style="max-width: 300px;">
+        <input type="text" id="username" placeholder="Enter your username">
+        <br><br>
+        <button onclick="registerPlayer()" style="padding: 8px 16px;">Next</button>
+    </div>
+</div>
+
+<div id="game-view">
+    <h1>Project Stylus Dashboard</h1>
+    <p>Logged in as: <strong id="display-username"></strong> <span id="display-uuid" style="color: #888; font-size: 12px;"></span></p>
+
+    <div class="dashboard-container">
+        <div class="main-content">
+
+            <!-- A: LOBBY SUB-VIEW -->
+            <div id="lobby-sub-view" class="phase-sub-view" style="display: block;">
+                <h2>Game Lobby</h2>
+                <button onclick="createRoom()" style="padding: 10px 15px;">Create Room</button>
+                <br><br>
+                <div style="display: flex; gap: 5px; max-width: 300px;">
+                    <input type="text" id="roomId" placeholder="Enter Room ID">
+                    <button onclick="joinRoom()">Join Room</button>
+                </div>
+                <h3 id="current-room-display" style="margin-top: 25px;">Status: Not in a room</h3>
+                <div id="admin-controls" class="admin-panel">
+                    <strong>Host Controls:</strong>
+                    <button onclick="hostStartGame()">Start Game</button>
+                </div>
+            </div>
+
+            <!-- B: WRITING SUB-VIEW -->
+            <div id="writing-sub-view" class="phase-sub-view">
+                <h2>Phase: Writing Bad Movie Descriptions</h2>
+                <div class="search-container">
+                    <input type="text" id="movie-search" placeholder="Search target movie..." autocomplete="off">
+                    <ul id="search-results" class="results-list"></ul>
+                </div>
+                <textarea id="bad-description" placeholder="Type your horrible description here..."></textarea>
+                <br><br>
+                <button onclick="submitDescription()" style="background: #28a745; color: white; padding: 8px 15px; border: none; cursor: pointer;">Submit Entry</button>
+            </div>
+
+            <!-- C: GUESSING SUB-VIEW -->
+            <div id="guessing-sub-view" class="phase-sub-view">
+                <h2>Phase: Guess the Movie</h2>
+                <p>Click on any description to open its guess input selector card:</p>
+                <div id="descriptions-container"></div>
+            </div>
+
+            <!-- D: WAITING SCREEN SUB-VIEW -->
+            <div id="waiting-sub-view" class="phase-sub-view">
+                <h2 style="color: #ffc107;">Waiting for others...</h2>
+                <p>Your choices are locked in. Stand by until all remaining game circle submissions resolve.</p>
+            </div>
+
+        </div>
+
+        <div class="chat-sidebar">
+            <h3>Room Logs & Chat</h3>
+            <div id="notifications"></div>
+            <div class="chat-input-row">
+                <input type="text" id="message" placeholder="Type a message...">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const USE_LOCAL = true;
+    const BASE_URL = USE_LOCAL ? 'http://localhost:8080' : 'https://project-stylus.onrender.com';
+    const WS_URL = USE_LOCAL ? 'http://localhost:8080/ws' : 'https://project-stylus.onrender.com/ws';
+
+    let stompClient = null, currentSubscription = null, activeRoomId = null, isAdmin = false;
+    let selectedMovieData = { id: null, name: "" };
+    let activeDescriptionsCached = []; // Local reference array cache
+
+    // Track selected movie target per active open description item card drawer context
+    let selectedGuessData = {};
+
+    let currentPlayer = { username: "", uuid: null, score: 0, hasSubmitted: false };
+
+    function registerPlayer() {
+        const usernameInput = document.getElementById('username').value.trim();
+        if (usernameInput.length < 2) return alert("Username too short.");
+
+        fetch(`${BASE_URL}/players/register?username=${encodeURIComponent(usernameInput)}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(playerData => {
+                currentPlayer = playerData;
+                document.getElementById('display-username').textContent = currentPlayer.username;
+                document.getElementById('display-uuid').textContent = `(UUID: ${currentPlayer.uuid})`;
+                document.getElementById('login-view').style.display = 'none';
+                document.getElementById('game-view').style.display = 'block';
+                connect();
+            }).catch(() => alert("Registration failed."));
+    }
+
+    function connect() {
+        stompClient = Stomp.over(new SockJS(WS_URL));
+        stompClient.connect({}, () => console.log('Connected to WS'));
+    }
+
+    function createRoom() {
+        fetch(`${BASE_URL}/api/rooms/create`, { method: 'POST' }).then(res => res.text()).then(roomId => {
+            document.getElementById('roomId').value = roomId;
+            isAdmin = true;
+            setupRoomConnection(roomId);
+        });
+    }
+
+    function joinRoom() {
+        const roomId = document.getElementById('roomId').value.trim();
+        if (!roomId) return alert("Enter Room ID");
+        isAdmin = false;
+        setupRoomConnection(roomId);
+    }
+
+    function setupRoomConnection(roomId) {
+        if (!stompClient || !stompClient.connected) return;
+        if (currentSubscription) currentSubscription.unsubscribe();
+
+        activeRoomId = roomId;
+        document.getElementById('current-room-display').textContent = "Status: Connected to Lobby " + roomId;
+        document.getElementById('admin-controls').style.display = isAdmin ? 'block' : 'none';
+
+        currentSubscription = stompClient.subscribe('/topic/' + roomId, (messagePayload) => {
+            handleIncomingPayload(messagePayload);
+        });
+        stompClient.send('/app/room.join/' + roomId, {}, JSON.stringify(currentPlayer));
+    }
+
+    function switchSubView(viewId) {
+        document.querySelectorAll('.phase-sub-view').forEach(v => v.style.display = 'none');
+        document.getElementById(viewId).style.display = 'block';
+    }
+
+    function handleIncomingPayload(payload) {
+        try {
+            const data = JSON.parse(payload.body);
+
+            // 1. Detect if this is the combined phase payload wrap or a standalone state object
+            let roomState = data.room ? data.room : data;
+
+            if (roomState && roomState.status) {
+                console.log("State synchronization broadcast received:", roomState.status);
+
+                if (roomState.status === "WRITING") {
+                    switchSubView('writing-sub-view');
+                    appendLogSystemMessage("System: Game started! Phase shifted to writing.");
+                }
+                else if (roomState.status === "GUESSING") {
+                    appendLogSystemMessage("System: All descriptions collected! Phase shifted to guessing.");
+
+                    // FORCE THE VIEW SWITCH FIRST so the screen changes instantly
+                    switchSubView('guessing-sub-view');
+
+                    // Extract the descriptions list out of the wrapper payload object safely
+                    if (data.descriptions) {
+                        activeDescriptionsCached = data.descriptions;
+                        displayGuessingCards();
+                    } else {
+                        console.warn("Guessing status received but no description array was attached to payload.");
+                    }
+                }
+                return;
+            }
+
+            // Handle regular chat text messages
+            appendLogText((data.user || "System") + ": " + (data.message || ""));
+
+        } catch(e) {
+            // Fallback for raw text frames printed directly out of the messaging template channel
+            console.log("Parsing fallback for text frame:", payload.body);
+
+            // If the server sends a raw system notification line, just log it cleanly
+            appendLogText("System: " + payload.body);
+        }
+    }
+
+    // Renders only descriptions written by OTHER players
+    function displayGuessingCards() {
+        switchSubView('guessing-sub-view');
+        const container = document.getElementById('descriptions-container');
+        container.innerHTML = "";
+
+        // FRONTEND FILTERING LOGIC: Filter out your own description entries
+        const filteredList = activeDescriptionsCached.filter(item => item.playerId !== currentPlayer.uuid);
+
+        if (filteredList.length === 0) {
+            container.innerHTML = "<p style='color:#888;'>No opponent descriptions available to guess.</p>";
+            return;
+        }
+
+        filteredList.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'description-card';
+            // Pass the explicit string ID dynamically to this instance drawer context
+            card.onclick = () => toggleGuessDrawer(item.id);
+
+            card.innerHTML = `
+            <p><strong>Description Prompt:</strong> "${item.description}"</p>
+            <div class="guess-drawer" id="drawer-${item.id}" onclick="event.stopPropagation();" style="display:none;">
+                <label><strong>Search & Match Movie Answer:</strong></label>
+                <div class="search-container">
+                    <input type="text" id="guess-search-${item.id}" placeholder="Type to search movie details..." autocomplete="off">
+                    <ul id="guess-results-${item.id}" class="results-list"></ul>
+                </div>
+                <br>
+                <button style="background:#00BFFF; color:white; border:none; padding:8px 12px; cursor:pointer;" onclick="submitGuess('${item.id}')">Submit Choice</button>
+            </div>
+        `;
+            container.appendChild(card);
+            setupInlineCardSearch(item.id);
+        });
+    }
+
+    function toggleGuessDrawer(id) {
+        const drawer = document.getElementById(`drawer-${id}`);
+        drawer.style.display = (drawer.style.display === 'block') ? 'none' : 'block';
+    }
+
+    function setupInlineCardSearch(id) {
+        // Correctly isolate references inside elements belonging strictly to this loop block ID context
+        const input = document.getElementById(`guess-search-${id}`);
+        const results = document.getElementById(`guess-results-${id}`);
+        let timer;
+
+        input.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            clearTimeout(timer);
+            if (query.length <= 1) { results.innerHTML = ''; results.style.display = 'none'; return; }
+
+            timer = setTimeout(() => {
+                fetch(`${BASE_URL}/movies/search?query=${encodeURIComponent(query)}`)
+                    .then(res => res.json())
+                    .then(movies => {
+                        results.innerHTML = '';
+                        if(movies.length === 0) {
+                            results.style.display = 'none';
+                            return;
+                        }
+
+                        movies.forEach(m => {
+                            const li = document.createElement('li');
+                            li.innerHTML = `<img src="${m.movieUrl || 'https://placehold.co/40x60'}" style="width:40px;height:60px;"><span class="movie-title">${m.name}</span>`;
+
+                            // Handle localized click assignments securely
+                            li.onclick = (event) => {
+                                event.stopPropagation();
+                                input.value = m.name;
+                                selectedGuessData[id] = { movieId: m.id, movieName: m.name };
+                                results.innerHTML = '';
+                                results.style.display = 'none';
+                            };
+                            results.appendChild(li);
+                        });
+                        results.style.display = 'block';
+                    });
+            }, 300);
+        });
+
+        // Prevent random outside window document clicks from breaking this dynamic active field instance context layout
+        document.addEventListener('click', (e) => {
+            if (e.target !== input && e.target !== results) {
+                results.style.display = 'none';
+            }
+        });
+    }
+
+    function submitGuess(descriptionId) {
+        const choice = selectedGuessData[descriptionId];
+        if (!choice) return alert("Please select a movie option from the dropdown search first!");
+
+        if (stompClient && stompClient.connected) {
+            stompClient.send('/app/room.guess-submit/' + activeRoomId, {}, JSON.stringify({
+                guessingPlayerId: currentPlayer.uuid,
+                descriptionId: descriptionId,
+                guessedMovieId: choice.movieId
+            }));
+
+            // Instantly transition local screen layout to structural waiting window
+            switchSubView('waiting-sub-view');
+        }
+    }
+
+    function submitDescription() {
+        const descText = document.getElementById('bad-description').value.trim();
+        if (!selectedMovieData.id || !descText) return alert("Supply movie target and prompt description text!");
+
+        const payload = {
+            id: null,
+            movieId: selectedMovieData.id,
+            movieName: selectedMovieData.name,
+            playerId: currentPlayer.uuid,
+            playerUsername: currentPlayer.username,
+            description: descText
+        };
+
+        if (stompClient && stompClient.connected) {
+            stompClient.send('/app/room.submit/' + activeRoomId, {}, JSON.stringify(payload));
+            document.getElementById('bad-description').value = "";
+            document.getElementById('movie-search').value = "";
+            selectedMovieData = { id: null, name: "" };
+
+            // Instantly transition layout to waiting screen representation
+            switchSubView('waiting-sub-view');
+        }
+    }
+
+    function appendLogText(text) {
+        const n = document.getElementById('notifications');
+        const p = document.createElement('p'); p.textContent = text;
+        n.appendChild(p); n.scrollTop = n.scrollHeight;
+    }
+
+    function appendLogSystemMessage(text) {
+        const n = document.getElementById('notifications');
+        const p = document.createElement('p'); p.style.color = "#d39e00"; p.style.fontWeight = "bold"; p.textContent = text;
+        n.appendChild(p); n.scrollTop = n.scrollHeight;
+    }
+
+    function hostStartGame() {
+        if (activeRoomId && stompClient.connected) stompClient.send('/app/room.start/' + activeRoomId, {}, {});
+    }
+
+    function sendMessage() {
+        const txt = document.getElementById('message').value.trim();
+        if (!txt || !activeRoomId) return;
+        stompClient.send('/app/send/' + activeRoomId, {}, JSON.stringify({ user: currentPlayer.username, userId: currentPlayer.uuid, message: txt }));
+        document.getElementById('message').value = "";
+    }
+
+    // Global main layout search block configuration hooks
+    const mainSearch = document.getElementById('movie-search');
+    const mainResults = document.getElementById('search-results');
+    let mainTimer;
+    mainSearch.addEventListener('input', (e) => {
+        const q = e.target.value.trim(); clearTimeout(mainTimer);
+        if(q.length <= 1) { mainResults.style.display = 'none'; return; }
+        mainTimer = setTimeout(() => {
+            fetch(`${BASE_URL}/movies/search?query=${encodeURIComponent(q)}`).then(res => res.json()).then(data => {
+                mainResults.innerHTML = '';
+                data.forEach(m => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<img src="${m.movieUrl || 'https://placehold.co/40x60'}"><span>${m.name}</span>`;
+                    li.onclick = () => {
+                        mainSearch.value = m.name;
+                        selectedMovieData = { id: m.id, name: m.name };
+                        mainResults.style.display = 'none';
+                    };
+                    mainResults.appendChild(li);
+                });
+                mainResults.style.display = 'block';
+            });
+        }, 300);
+    });
+</script>
+</body>
+</html>

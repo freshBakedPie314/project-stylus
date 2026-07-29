@@ -17,13 +17,17 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
         "backdrop_path",
         "genre_ids",
         "id",
+        "media_type",
         "original_language",
         "original_title",
+        "original_name",
         "overview",
         "popularity",
         "poster_path",
         "release_date",
+        "first_air_date",
         "title",
+        "name",
         "video",
         "vote_average",
         "vote_count"
@@ -39,10 +43,24 @@ public class TDBMovieResponse {
     private List<Long> genreIds;
     @JsonProperty("id")
     private Long id;
+
+    // Multi-Search Specific Field
+    @JsonProperty("media_type")
+    private String mediaType;
+
     @JsonProperty("original_language")
     private String originalLanguage;
     @JsonProperty("original_title")
     private String originalTitle;
+
+    // TV Specific Fields
+    @JsonProperty("original_name")
+    private String originalName;
+    @JsonProperty("name")
+    private String name;
+    @JsonProperty("first_air_date")
+    private String firstAirDate;
+
     @JsonProperty("overview")
     private String overview;
     @JsonProperty("popularity")
@@ -102,6 +120,17 @@ public class TDBMovieResponse {
         this.id = id;
     }
 
+    // Media Type Getter and Setter
+    @JsonProperty("media_type")
+    public String getMediaType() {
+        return mediaType;
+    }
+
+    @JsonProperty("media_type")
+    public void setMediaType(String mediaType) {
+        this.mediaType = mediaType;
+    }
+
     @JsonProperty("original_language")
     public String getOriginalLanguage() {
         return originalLanguage;
@@ -120,6 +149,37 @@ public class TDBMovieResponse {
     @JsonProperty("original_title")
     public void setOriginalTitle(String originalTitle) {
         this.originalTitle = originalTitle;
+    }
+
+    // TV Getters and Setters
+    @JsonProperty("original_name")
+    public String getOriginalName() {
+        return originalName;
+    }
+
+    @JsonProperty("original_name")
+    public void setOriginalName(String originalName) {
+        this.originalName = originalName;
+    }
+
+    @JsonProperty("name")
+    public String getName() {
+        return name;
+    }
+
+    @JsonProperty("name")
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    @JsonProperty("first_air_date")
+    public String getFirstAirDate() {
+        return firstAirDate;
+    }
+
+    @JsonProperty("first_air_date")
+    public void setFirstAirDate(String firstAirDate) {
+        this.firstAirDate = firstAirDate;
     }
 
     @JsonProperty("overview")
@@ -211,5 +271,4 @@ public class TDBMovieResponse {
     public void setAdditionalProperty(String name, Object value) {
         this.additionalProperties.put(name, value);
     }
-
 }
