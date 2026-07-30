@@ -12,7 +12,6 @@
         .main-content { flex: 2; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .chat-sidebar { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; height: 500px; }
 
-        /* Subviews Display Controls */
         .phase-sub-view { display: none; }
 
         #notifications { flex-grow: 1; border: 1px solid #eee; padding: 10px; overflow-y: auto; margin-bottom: 10px; border-radius: 4px; background: #fafafa; height: 250px; }
@@ -31,13 +30,18 @@
 
         .admin-panel { margin-top: 20px; padding: 10px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; display: none; }
 
-        /* Scoped Clickable Guessing Cards */
         .description-card { background: #fdfdfd; border: 1px solid #e0e0e0; border-left: 5px solid #00BFFF; padding: 15px; margin-bottom: 15px; border-radius: 4px; cursor: pointer; transition: background 0.2s, opacity 0.3s; }
         .description-card:hover { background: #f5f5f5; }
         .guess-drawer { display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #eee; }
 
         .revealed-flex { display: flex; gap: 15px; align-items: center; }
         .revealed-img { width: 50px; height: 75px; border-radius: 4px; object-fit: cover; }
+
+        #local-waiting-banner { display: none; background: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 15px; border-radius: 4px; text-align: center; font-weight: bold; margin-top: 20px; }
+
+        .review-section { margin-top: 25px; border-top: 2px dashed #eee; padding-top: 20px; }
+        .review-card { background: #fafafa; border: 1px solid #ddd; padding: 12px; margin-bottom: 10px; border-radius: 6px; display: flex; gap: 15px; align-items: center; }
+        .review-card img { width: 45px; height: 65px; object-fit: cover; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -62,11 +66,11 @@
             <!-- A: LOBBY VIEW -->
             <div id="lobby-sub-view" class="phase-sub-view" style="display: block;">
                 <h2>Game Lobby</h2>
-                <button onclick="createRoom()" style="padding: 10px 15px;">Create Room</button>
+                <button id="create-room-btn" onclick="createRoom()" style="padding: 10px 15px;">Create Room</button>
                 <br><br>
                 <div style="display: flex; gap: 5px; max-width: 300px;">
                     <input type="text" id="roomId" placeholder="Enter Room ID">
-                    <button onclick="joinRoom()">Join Room</button>
+                    <button id="join-room-btn" onclick="joinRoom()">Join Room</button>
                 </div>
                 <h3 id="current-room-display" style="margin-top: 25px;">Status: Not in a room</h3>
                 <div id="admin-controls" class="admin-panel">
@@ -93,8 +97,13 @@
             <!-- C: GUESSING VIEW -->
             <div id="guessing-sub-view" class="phase-sub-view">
                 <h2>Phase: Guess the Movie</h2>
+                <button id="give-up-btn" onclick="triggerTotalSurrender()" style="background:#FF007A; color:white; padding:10px 15px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-bottom:15px;">
+                    Give Up Match (Reveal All Answers)
+                </button>
                 <p>Click on an opponent's card description layout below to open its inline movie choice search input field:</p>
                 <div id="descriptions-container"></div>
+
+                <div id="local-waiting-banner">Waiting for other players to finish...</div>
             </div>
 
             <!-- D: LOCK-IN WAITING SCREEN VIEW -->
@@ -107,13 +116,18 @@
             <div id="results-sub-view" class="phase-sub-view">
                 <h2 style="color: #32CD32;">Final Standings & Game Results</h2>
                 <div id="leaderboard-container"></div>
+
+                <div class="review-section">
+                    <h3>All Movie Submissions Review</h3>
+                    <div id="review-cards-container"></div>
+                </div>
+
                 <br>
-                <button onclick="switchSubView('lobby-sub-view')" style="background:#FFA500; color:white; padding:10px 15px; border:none; cursor:pointer; border-radius:4px;">Return to Lobby</button>
+                <button onclick="resetLobbyViewUI()" style="background:#FFA500; color:white; padding:10px 15px; border:none; cursor:pointer; border-radius:4px;">Return to Lobby</button>
             </div>
 
         </div>
 
-        <!-- RIGHT SIDE: REAL-TIME SCORES & PERSISTENT COMMUNICATION STREAM -->
         <div class="chat-sidebar">
             <div id="live-scoreboard">
                 <h4>Live Standings:</h4>
@@ -140,8 +154,10 @@
     let activeDescriptionsCached = [];
     let selectedGuessData = {};
 
-    let totalCardsToGuessCount = 0;
-    let resolvedCardsCount = 0;
+    let totalCardsToGuess = 0;
+    let correctlyGuessedCount = 0;
+    let resolvedCardIds = [];
+    let hasGivenUp = false;
 
     let currentPlayer = { username: "", id: null, score: 0, hasSubmitted: false };
 
@@ -173,6 +189,10 @@
         fetch(`${BASE_URL}/api/rooms/create`, { method: 'POST' }).then(res => res.text()).then(roomId => {
             document.getElementById('roomId').value = roomId;
             isAdmin = true;
+
+            document.getElementById('join-room-btn').disabled = true;
+            document.getElementById('create-room-btn').disabled = true;
+
             setupRoomConnection(roomId);
         });
     }
@@ -197,15 +217,21 @@
         });
 
         stompClient.subscribe('/topic/' + roomId + '/user/' + currentPlayer.id, (messagePayload) => {
-            const privateResponse = JSON.parse(messagePayload.body);
+            const data = JSON.parse(messagePayload.body);
 
-            // Check if payload matches GuessResponseDTO
-            if (privateResponse.descriptionId !== undefined && privateResponse.correct !== undefined) {
-                handleGuessResponse(privateResponse);
+            // Handle Direct Array Payload response when giving up
+            if (Array.isArray(data)) {
+                // Update global reference matrix history cache immediately for the final review layout
+                activeDescriptionsCached = data;
+
+                data.forEach(revealedCard => {
+                    handleRevealResponse(revealedCard, "❌ Given Up", "#FF007A", "#fff0f3");
+                });
+                return;
             }
-            // Check if payload matches GiveUpResponseDTO (Handled by TODO spec rule)
-            else if (privateResponse.giveUpTokenMarker !== undefined || privateResponse.movieName !== undefined) {
-                handleGiveUpRevealResponse(privateResponse);
+
+            if (data.descriptionId !== undefined && data.correct !== undefined) {
+                handleGuessResponse(data);
             }
         });
 
@@ -220,7 +246,14 @@
     function handleIncomingPayload(payload) {
         try {
             const data = JSON.parse(payload.body);
+
+            // Check if this payload is a LeaderboardPhasePayload object bundle
             let roomState = data.room ? data.room : data;
+
+            if (data.userId && data.username && !roomState.status) {
+                appendLogSystemMessage(`${data.username} has given up on the match!`);
+                return;
+            }
 
             if (roomState.status) {
                 if (roomState.players) {
@@ -231,13 +264,23 @@
                     switchSubView('writing-sub-view');
                 }
                 else if (roomState.status === "GUESSING") {
+                    if (hasGivenUp) return;
+
                     switchSubView('guessing-sub-view');
+                    document.getElementById('local-waiting-banner').style.display = 'none';
+                    document.getElementById('give-up-btn').style.display = 'inline-block';
+                    document.getElementById('give-up-btn').disabled = false;
+
                     if (data.descriptions) {
                         activeDescriptionsCached = data.descriptions;
                         displayGuessingCards();
                     }
                 }
-                else if (roomState.status === "RESULTS") {
+                else if (roomState.status === "LEADERBOARD") {
+                    // Update global cache from incoming bundle payload data before displaying the review screen
+                    if (data.descriptions) {
+                        activeDescriptionsCached = data.descriptions;
+                    }
                     displayLeaderboardScreen(roomState.players);
                 }
                 return;
@@ -257,15 +300,20 @@
     }
 
     function displayGuessingCards() {
+        if (hasGivenUp) return;
+
         const container = document.getElementById('descriptions-container');
         container.innerHTML = "";
 
-        const filteredList = activeDescriptionsCached.filter(item => item.playerId !== currentPlayer.id);
-        totalCardsToGuessCount = filteredList.length;
-        resolvedCardsCount = 0;
+        resolvedCardIds = [];
 
-        if (totalCardsToGuessCount === 0) {
-            switchSubView('waiting-sub-view');
+        const filteredList = activeDescriptionsCached.filter(item => item.playerId !== currentPlayer.id);
+        totalCardsToGuess = filteredList.length;
+        correctlyGuessedCount = 0;
+
+        if (totalCardsToGuess === 0) {
+            document.getElementById('local-waiting-banner').style.display = 'block';
+            document.getElementById('give-up-btn').style.display = 'none';
             return;
         }
 
@@ -284,8 +332,7 @@
                         <ul id="guess-results-${item.id}" class="results-list"></ul>
                     </div>
                     <br>
-                    <button style="background:#00BFFF; color:white; border:none; padding:8px 12px; cursor:pointer;" onclick="submitGuess('${item.id}')">Submit Guess Choice</button>
-                    <button style="background:#FF007A; color:white; border:none; padding:8px 12px; cursor:pointer; margin-left:10px;" onclick="triggerGiveUp('${item.id}')">Give Up</button>
+                    <button id="guess-btn-${item.id}" style="background:#00BFFF; color:white; border:none; padding:8px 12px; cursor:pointer;" onclick="submitGuess('${item.id}')">Submit Guess Choice</button>
                 </div>
             `;
             container.appendChild(card);
@@ -294,6 +341,7 @@
     }
 
     function toggleGuessDrawer(id) {
+        if (resolvedCardIds.includes(id) || hasGivenUp) return;
         const drawer = document.getElementById(`drawer-${id}`);
         if(drawer) {
             drawer.style.display = (drawer.style.display === 'block') ? 'none' : 'block';
@@ -342,8 +390,13 @@
     }
 
     function submitGuess(descriptionId) {
+        if (resolvedCardIds.includes(descriptionId) || hasGivenUp) return;
+
         const choice = selectedGuessData[descriptionId];
-        if (!choice) return alert("Pick a movie out of the live dropdown list context first!");
+        if (!choice) return alert("Pick a movie out of the dropdown list first!");
+
+        const submitBtn = document.getElementById(`guess-btn-${descriptionId}`);
+        if (submitBtn) submitBtn.disabled = true;
 
         if (stompClient && stompClient.connected) {
             stompClient.send('/app/room.guess-submit/' + activeRoomId, {}, JSON.stringify({
@@ -356,83 +409,89 @@
 
     function handleGuessResponse(result) {
         const card = document.getElementById(`card-container-${result.descriptionId}`);
+        const submitBtn = document.getElementById(`guess-btn-${result.descriptionId}`);
         if (!card) return;
 
         if (result.correct) {
-            // Disable element interaction layout cleanly
-            card.onclick = null;
-            card.style.cursor = "default";
-            card.style.borderLeft = "5px solid #32CD32";
-            card.style.background = "#eef9ee";
+            handleRevealResponse(result, "🎉 YOU GOT IT!", "#32CD32", "#eef9ee");
 
-            card.innerHTML = `
-                <div class="revealed-flex">
-                    <img class="revealed-img" src="${result.movieUrl || 'https://placehold.co/50x75?text=Solved'}">
-                    <div>
-                        <p style="color:#28a745; font-weight:bold; margin:0 0 5px 0;">✓ Correctly Solved!</p>
-                        <h4 style="margin:0; color:#333;">Movie: ${result.movieName}</h4>
-                        <p style="margin:5px 0 0 0; font-size:13px; color:#666;">${result.movieDescription || 'No description provided.'}</p>
-                    </div>
-                </div>
-            `;
-
-            checkLocalResolutionProgress();
+            correctlyGuessedCount++;
+            if (correctlyGuessedCount >= totalCardsToGuess) {
+                document.getElementById('local-waiting-banner').style.display = 'block';
+                document.getElementById('give-up-btn').style.display = 'none';
+            }
         } else {
+            if (submitBtn) submitBtn.disabled = false;
+            if (resolvedCardIds.includes(result.descriptionId) || hasGivenUp) return;
+
             card.style.borderLeft = "5px solid #FF007A";
-            alert("Wrong choice target! Review description details and try another option.");
-            setTimeout(() => { card.style.borderLeft = "5px solid #00BFFF"; }, 1500);
+            card.style.background = "#fff0f3";
+
+            let feedbackLabel = card.querySelector('.guess-feedback-text');
+            if (!feedbackLabel) {
+                feedbackLabel = document.createElement('p');
+                feedbackLabel.className = 'guess-feedback-text';
+                feedbackLabel.style.color = "#FF007A";
+                feedbackLabel.style.fontWeight = "bold";
+                feedbackLabel.style.margin = "5px 0 0 0";
+                card.insertBefore(feedbackLabel, card.querySelector('.guess-drawer'));
+            }
+            feedbackLabel.textContent = "❌ Not quite! Try analyzing the details again.";
         }
     }
 
-    function triggerGiveUp(descriptionId) {
-        console.log("TODO: Player decided to surrender checking card option: ", descriptionId);
-
-        // BACKEND TODO: Create destination endpoint route mapping listener for this path
-        if (stompClient && stompClient.connected) {
-            stompClient.send('/app/room.guess-giveup/' + activeRoomId, {}, JSON.stringify({
-                playerId: currentPlayer.id,
-                descriptionId: descriptionId
-            }));
-        }
-    }
-
-    function handleGiveUpRevealResponse(result) {
+    function handleRevealResponse(result, statusText, borderColor, bgColor) {
         const card = document.getElementById(`card-container-${result.descriptionId}`);
         if (!card) return;
 
-        // Permanently lock out interaction
+        if (!resolvedCardIds.includes(result.descriptionId)) {
+            resolvedCardIds.push(result.descriptionId);
+        }
+
         card.onclick = null;
         card.style.cursor = "default";
-        card.style.borderLeft = "5px solid #666";
-        card.style.background = "#f0f0f0";
+        card.style.borderLeft = `5px solid ${borderColor}`;
+        card.style.background = bgColor;
 
         card.innerHTML = `
-            <div class="revealed-flex" style="opacity: 0.7;">
-                <img class="revealed-img" src="${result.movieUrl || 'https://placehold.co/50x75?text=GivenUp'}">
+            <div class="revealed-flex">
+                <img class="revealed-img" src="${result.movieUrl || 'https://placehold.co/50x75?text=Revealed'}">
                 <div>
-                    <p style="color:#FF007A; font-weight:bold; margin:0 0 5px 0;">❌ Given Up</p>
-                    <h4 style="margin:0; color:#333;">Answer: ${result.movieName}</h4>
-                    <p style="margin:5px 0 0 0; font-size:13px; color:#666;">${result.movieDescription || 'Solution bypassed by client choice.'}</p>
+                    <p style="color:${borderColor}; font-weight:bold; margin:0 0 5px 0; font-size:16px;">${statusText}</p>
+                    <h4 style="margin:0; color:#333;">Movie: ${result.movieName || 'Hidden Target'}</h4>
+                    <p style="margin:5px 0 0 0; font-size:13px; color:#666;">${result.description || result.movieDescription || 'No summary text populated.'}</p>
                 </div>
             </div>
         `;
-
-        checkLocalResolutionProgress();
     }
 
-    function checkLocalResolutionProgress() {
-        resolvedCardsCount++;
-        if (resolvedCardsCount >= totalCardsToGuessCount) {
-            switchSubView('waiting-sub-view');
-            console.log("Local completion tracked. Shifting display to loading stand-by panel.");
+    function triggerTotalSurrender() {
+        if (confirm("Are you sure you want to give up completely? You will get 0 points for remaining cards, but see all answers.")) {
+            hasGivenUp = true;
+
+            const giveUpBtn = document.getElementById('give-up-btn');
+            if (giveUpBtn) {
+                giveUpBtn.disabled = true;
+                giveUpBtn.style.display = 'none';
+            }
+
+            document.getElementById('local-waiting-banner').style.display = 'block';
+            document.querySelectorAll('[id^="guess-btn-"]').forEach(btn => btn.disabled = true);
+
+            if (stompClient && stompClient.connected) {
+                stompClient.send('/app/room.give-up/' + activeRoomId, {}, JSON.stringify({
+                    userId: currentPlayer.id
+                }));
+            }
         }
     }
 
     function displayLeaderboardScreen(playersList) {
         switchSubView('results-sub-view');
+
+        // Render Standings
         const container = document.getElementById('leaderboard-container');
         container.innerHTML = "";
-
         playersList.sort((a, b) => b.score - a.score);
 
         playersList.forEach((player, index) => {
@@ -448,6 +507,36 @@
             row.innerHTML = `Rank #${index + 1}: ${player.username} — 🏆 ${player.score} Points`;
             container.appendChild(row);
         });
+
+        // Render Comprehensive Matrix Answer Keys
+        const reviewContainer = document.getElementById('review-cards-container');
+        reviewContainer.innerHTML = "";
+
+        if (activeDescriptionsCached && activeDescriptionsCached.length > 0) {
+            activeDescriptionsCached.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'review-card';
+                card.innerHTML = `
+                    <img src="${item.movieUrl || 'https://placehold.co/45x65?text=Movie'}">
+                    <div>
+                        <h4 style="margin: 0 0 4px 0; color: #00BFFF;">Movie Target: ${item.movieName || 'Unknown Title'}</h4>
+                        <p style="margin: 0 0 4px 0; font-style: italic; font-size: 14px;">"${item.description}"</p>
+                        <small style="color: #777;">Authored by: <strong>${item.playerUsername || 'Anonymous'}</strong></small>
+                    </div>
+                `;
+                reviewContainer.appendChild(card);
+            });
+        } else {
+            reviewContainer.innerHTML = `<p style="color:#999; font-style:italic;">No description cards recorded for this session.</p>`;
+        }
+    }
+
+    function resetLobbyViewUI() {
+        hasGivenUp = false;
+        document.getElementById('join-room-btn').disabled = false;
+        document.getElementById('create-room-btn').disabled = false;
+        document.getElementById('roomId').value = "";
+        switchSubView('lobby-sub-view');
     }
 
     function submitDescription() {
@@ -480,7 +569,7 @@
 
     function appendLogSystemMessage(text) {
         const n = document.getElementById('notifications');
-        const p = document.createElement('p'); p.style.color = "#d39e00"; p.style.fontWeight = "bold"; p.textContent = text;
+        const p = document.createElement('p'); p.style.color = "#FF007A"; p.style.fontWeight = "bold"; p.textContent = text;
         n.appendChild(p); n.scrollTop = n.scrollHeight;
     }
 

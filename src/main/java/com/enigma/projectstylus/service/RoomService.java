@@ -3,6 +3,7 @@ package com.enigma.projectstylus.service;
 import com.enigma.projectstylus.RoomStatus;
 import com.enigma.projectstylus.dto.DescriptionDTO;
 import com.enigma.projectstylus.dto.GuessingPhaseInitPayload;
+import com.enigma.projectstylus.dto.LeaderboardPhasePayload;
 import com.enigma.projectstylus.model.Description;
 import com.enigma.projectstylus.model.GameRoom;
 import com.enigma.projectstylus.model.Player;
@@ -44,6 +45,7 @@ public class RoomService {
                         .time(60L)
                         .status(RoomStatus.LOBBY)
                         .players(new ArrayList<>())
+                        .totalDone(0L)
                         .build()
         );
 
@@ -118,6 +120,18 @@ public class RoomService {
         Collections.shuffle(randomizedDescriptions);
 
         GuessingPhaseInitPayload payload = new GuessingPhaseInitPayload(room, randomizedDescriptions);
+        simpMessagingTemplate.convertAndSend("/topic/" + roomId, payload);
+    }
+
+    public void endGame(String roomId) {
+        GameRoom room = redisRoomService.getRoom(roomId);
+        if (room == null) return;
+
+        room.setStatus(RoomStatus.LEADERBOARD);
+        redisRoomService.saveRoom(room);
+
+        List<Description> descriptions = redisDescriptionService.fetchAllDescriptions(roomId);
+        LeaderboardPhasePayload payload = new LeaderboardPhasePayload(room, descriptions);
         simpMessagingTemplate.convertAndSend("/topic/" + roomId, payload);
     }
 }

@@ -18,4 +18,5 @@ public class Player {
     private UUID id;
     private Long score;
     private Boolean hasSubmitted;
+    private Long totalGuessed;
 }

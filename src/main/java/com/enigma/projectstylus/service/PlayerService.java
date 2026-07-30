@@ -16,6 +16,7 @@ public class PlayerService {
                         .id(UUID.randomUUID())
                         .score(0L)
                         .hasSubmitted(false)
+                        .totalGuessed(0L)
                 .build()
         );
     }

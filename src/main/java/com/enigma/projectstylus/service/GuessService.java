@@ -18,12 +18,14 @@ public class GuessService {
     private final RedisDescriptionService redisDescriptionService;
     private final RedisRoomService redisRoomService;
     private final SimpMessagingTemplate simpMessagingTemplate;
+    private final RoomService roomService;
 
     public GuessService(RedisDescriptionService redisDescriptionService, RedisRoomService redisRoomService,
-                        SimpMessagingTemplate simpMessagingTemplate) {
+                        SimpMessagingTemplate simpMessagingTemplate, RoomService roomService) {
         this.redisDescriptionService = redisDescriptionService;
         this.redisRoomService = redisRoomService;
         this.simpMessagingTemplate = simpMessagingTemplate;
+        this.roomService = roomService;
     }
 
     public GuessResponseDTO validateGuess(String roomId, GuessDTO guess) {
@@ -49,7 +51,15 @@ public class GuessService {
                 room.getPlayers().forEach(player -> {
                     if (player.getId().equals(guess.getPlayerId()))
                     {
+                        long currentGuessed = (player.getTotalGuessed() != null) ? player.getTotalGuessed() : 0;
                         player.setScore(player.getScore() + 100);
+                        player.setTotalGuessed(currentGuessed + 1);
+
+                        if (player.getTotalGuessed() == room.getPlayers().size() - 1)
+                        {
+                            long currentDone = (room.getTotalDone() != null) ? room.getTotalDone() : 0L;
+                            room.setTotalDone(currentDone + 1L);
+                        }
                     } else if (player.getId().equals(descriptionToCheck.getPlayerId()))
                     {
                         player.setScore(player.getScore() + 50);
@@ -62,6 +72,10 @@ public class GuessService {
                 simpMessagingTemplate.convertAndSend("/topic/" + roomId, room);
             }
 
+            if(room.getTotalDone() == room.getPlayers().size())
+            {
+                roomService.endGame(roomId);
+            }
             return GuessResponseDTO.builder()
                     .correct(true)
                     .descriptionId(descriptionToCheck.getId())

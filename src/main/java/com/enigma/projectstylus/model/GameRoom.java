@@ -19,4 +19,5 @@ public class GameRoom {
     private Long time;
     private RoomStatus status;
     private List<Player> players;
+    private Long totalDone;
 }
