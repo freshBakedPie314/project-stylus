@@ -7,7 +7,7 @@ import java.util.List;
 
 @Data
 @AllArgsConstructor
-public class GuessingPhasePayload {
+public class GuessingPhaseInitPayload {
     private GameRoom room;
     private List<DescriptionDTO> descriptions;
 }

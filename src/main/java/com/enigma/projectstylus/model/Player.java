@@ -15,7 +15,7 @@ public class Player {
     private static final long serialVersionUID = 1L;
 
     private String username;
-    private UUID uuid;
+    private UUID id;
     private Long score;
     private Boolean hasSubmitted;
 }

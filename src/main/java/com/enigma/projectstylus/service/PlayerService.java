@@ -13,7 +13,7 @@ public class PlayerService {
         return ResponseEntity.ok(
                 Player.builder()
                         .username(username)
-                        .uuid(UUID.randomUUID())
+                        .id(UUID.randomUUID())
                         .score(0L)
                         .hasSubmitted(false)
                 .build()

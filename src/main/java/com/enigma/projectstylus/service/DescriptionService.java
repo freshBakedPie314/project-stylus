@@ -16,6 +16,10 @@ public class DescriptionService {
     }
 
     public void addDescription(String roomId, Description description) {
+        if (description.getId() == null) {
+            description.setId(java.util.UUID.randomUUID());
+        }
+
         redisDescriptionService.addDescription(roomId, description);
     }
 

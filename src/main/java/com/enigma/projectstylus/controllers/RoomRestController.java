@@ -1,6 +1,8 @@
 package com.enigma.projectstylus.controllers;
 
 import com.enigma.projectstylus.dto.DescriptionDTO;
+import com.enigma.projectstylus.dto.GuessDTO;
+import com.enigma.projectstylus.dto.GuessResponseDTO;
 import com.enigma.projectstylus.service.DescriptionService;
 import com.enigma.projectstylus.service.RoomService;
 import org.springframework.http.ResponseEntity;

@@ -1,8 +1,10 @@
 package com.enigma.projectstylus.controllers;
 
+import com.enigma.projectstylus.dto.GuessDTO;
 import com.enigma.projectstylus.model.Description;
 import com.enigma.projectstylus.model.Player;
 import com.enigma.projectstylus.service.DescriptionService;
+import com.enigma.projectstylus.service.GuessService;
 import com.enigma.projectstylus.service.RoomService;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -14,10 +16,12 @@ public class RoomWSController {
 
     private final RoomService roomService;
     private final DescriptionService descriptionService;
+    private final GuessService guessService;
 
-    public RoomWSController(RoomService roomService, DescriptionService descriptionService) {
+    public RoomWSController(RoomService roomService, DescriptionService descriptionService,  GuessService guessService) {
         this.roomService = roomService;
         this.descriptionService = descriptionService;
+        this.guessService = guessService;
     }
 
     @MessageMapping("/room.join/{roomId}")
@@ -40,5 +44,10 @@ public class RoomWSController {
     @MessageMapping("/room.guess/{roomId}")
     public void switchStateTOGuessing(@DestinationVariable String roomId) {
         roomService.startGuess(roomId);
+    }
+
+    @MessageMapping("/room.guess-submit/{roomId}")
+    public void validateGuess(@DestinationVariable String roomId, @Payload GuessDTO guess) {
+        guessService.validateGuess(roomId, guess);
     }
 }

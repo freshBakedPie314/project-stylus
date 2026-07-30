@@ -6,20 +6,21 @@
     <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f9f9f9; }
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f9f9f9; color: #333; }
         #game-view { display: none; }
         .dashboard-container { display: flex; gap: 30px; margin-top: 20px; }
         .main-content { flex: 2; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .chat-sidebar { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; height: 450px; }
+        .chat-sidebar { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; height: 500px; }
 
-        /* Sub-Views */
+        /* Subviews Display Controls */
         .phase-sub-view { display: none; }
 
-        #notifications { flex-grow: 1; border: 1px solid #eee; padding: 10px; overflow-y: auto; margin-bottom: 10px; border-radius: 4px; background: #fafafa; }
+        #notifications { flex-grow: 1; border: 1px solid #eee; padding: 10px; overflow-y: auto; margin-bottom: 10px; border-radius: 4px; background: #fafafa; height: 250px; }
+        #live-scoreboard { background: #f0f8ff; padding: 10px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #00BFFF; font-size: 14px; }
         .chat-input-row { display: flex; gap: 5px; }
         .chat-input-row input { flex-grow: 1; padding: 8px; }
 
-        .search-container { max-width: 400px; margin-top: 15px; position: relative; }
+        .search-container { max-width: 400px; margin-top: 5px; position: relative; }
         input[type="text"], textarea { padding: 8px; font-size: 14px; width: 100%; box-sizing: border-box; }
         textarea { resize: vertical; height: 80px; margin-top: 5px; }
 
@@ -30,10 +31,13 @@
 
         .admin-panel { margin-top: 20px; padding: 10px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; display: none; }
 
-        /* Interactive Guessing Cards Layout */
-        .description-card { background: #fdfdfd; border: 1px solid #e0e0e0; border-left: 5px solid #00BFFF; padding: 15px; margin-bottom: 15px; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
+        /* Scoped Clickable Guessing Cards */
+        .description-card { background: #fdfdfd; border: 1px solid #e0e0e0; border-left: 5px solid #00BFFF; padding: 15px; margin-bottom: 15px; border-radius: 4px; cursor: pointer; transition: background 0.2s, opacity 0.3s; }
         .description-card:hover { background: #f5f5f5; }
         .guess-drawer { display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #eee; }
+
+        .revealed-flex { display: flex; gap: 15px; align-items: center; }
+        .revealed-img { width: 50px; height: 75px; border-radius: 4px; object-fit: cover; }
     </style>
 </head>
 <body>
@@ -50,12 +54,12 @@
 
 <div id="game-view">
     <h1>Project Stylus Dashboard</h1>
-    <p>Logged in as: <strong id="display-username"></strong> <span id="display-uuid" style="color: #888; font-size: 12px;"></span></p>
+    <p>Logged in as: <strong id="display-username"></strong> <span id="display-id" style="color: #888; font-size: 12px;"></span></p>
 
     <div class="dashboard-container">
         <div class="main-content">
 
-            <!-- A: LOBBY SUB-VIEW -->
+            <!-- A: LOBBY VIEW -->
             <div id="lobby-sub-view" class="phase-sub-view" style="display: block;">
                 <h2>Game Lobby</h2>
                 <button onclick="createRoom()" style="padding: 10px 15px;">Create Room</button>
@@ -71,34 +75,51 @@
                 </div>
             </div>
 
-            <!-- B: WRITING SUB-VIEW -->
+            <!-- B: WRITING VIEW -->
             <div id="writing-sub-view" class="phase-sub-view">
                 <h2>Phase: Writing Bad Movie Descriptions</h2>
                 <div class="search-container">
-                    <input type="text" id="movie-search" placeholder="Search target movie..." autocomplete="off">
+                    <label><strong>1. Search & Select Movie Target:</strong></label>
+                    <input type="text" id="movie-search" placeholder="Type to search movie database..." autocomplete="off">
                     <ul id="search-results" class="results-list"></ul>
                 </div>
+                <br>
+                <label><strong>2. Your Bad Description Prompt:</strong></label>
                 <textarea id="bad-description" placeholder="Type your horrible description here..."></textarea>
                 <br><br>
                 <button onclick="submitDescription()" style="background: #28a745; color: white; padding: 8px 15px; border: none; cursor: pointer;">Submit Entry</button>
             </div>
 
-            <!-- C: GUESSING SUB-VIEW -->
+            <!-- C: GUESSING VIEW -->
             <div id="guessing-sub-view" class="phase-sub-view">
                 <h2>Phase: Guess the Movie</h2>
-                <p>Click on any description to open its guess input selector card:</p>
+                <p>Click on an opponent's card description layout below to open its inline movie choice search input field:</p>
                 <div id="descriptions-container"></div>
             </div>
 
-            <!-- D: WAITING SCREEN SUB-VIEW -->
+            <!-- D: LOCK-IN WAITING SCREEN VIEW -->
             <div id="waiting-sub-view" class="phase-sub-view">
                 <h2 style="color: #ffc107;">Waiting for others...</h2>
-                <p>Your choices are locked in. Stand by until all remaining game circle submissions resolve.</p>
+                <p>Your current phase submission requirements are locked. Standby until remaining players finish checking in.</p>
+            </div>
+
+            <!-- E: RESULTS / LEADERBOARD VIEW -->
+            <div id="results-sub-view" class="phase-sub-view">
+                <h2 style="color: #32CD32;">Final Standings & Game Results</h2>
+                <div id="leaderboard-container"></div>
+                <br>
+                <button onclick="switchSubView('lobby-sub-view')" style="background:#FFA500; color:white; padding:10px 15px; border:none; cursor:pointer; border-radius:4px;">Return to Lobby</button>
             </div>
 
         </div>
 
+        <!-- RIGHT SIDE: REAL-TIME SCORES & PERSISTENT COMMUNICATION STREAM -->
         <div class="chat-sidebar">
+            <div id="live-scoreboard">
+                <h4>Live Standings:</h4>
+                <div id="scoreboard-entries"><span style="color:#999;font-style:italic;">No players connected</span></div>
+            </div>
+
             <h3>Room Logs & Chat</h3>
             <div id="notifications"></div>
             <div class="chat-input-row">
@@ -116,12 +137,13 @@
 
     let stompClient = null, currentSubscription = null, activeRoomId = null, isAdmin = false;
     let selectedMovieData = { id: null, name: "" };
-    let activeDescriptionsCached = []; // Local reference array cache
-
-    // Track selected movie target per active open description item card drawer context
+    let activeDescriptionsCached = [];
     let selectedGuessData = {};
 
-    let currentPlayer = { username: "", uuid: null, score: 0, hasSubmitted: false };
+    let totalCardsToGuessCount = 0;
+    let resolvedCardsCount = 0;
+
+    let currentPlayer = { username: "", id: null, score: 0, hasSubmitted: false };
 
     function registerPlayer() {
         const usernameInput = document.getElementById('username').value.trim();
@@ -130,18 +152,21 @@
         fetch(`${BASE_URL}/players/register?username=${encodeURIComponent(usernameInput)}`, { method: 'POST' })
             .then(res => res.json())
             .then(playerData => {
-                currentPlayer = playerData;
+                currentPlayer.username = playerData.username;
+                currentPlayer.id = playerData.id || playerData.uuid;
+                currentPlayer.score = playerData.score || 0;
+
                 document.getElementById('display-username').textContent = currentPlayer.username;
-                document.getElementById('display-uuid').textContent = `(UUID: ${currentPlayer.uuid})`;
+                document.getElementById('display-id').textContent = `(ID: ${currentPlayer.id})`;
                 document.getElementById('login-view').style.display = 'none';
                 document.getElementById('game-view').style.display = 'block';
                 connect();
-            }).catch(() => alert("Registration failed."));
+            }).catch(() => alert("Registration failed. Ensure backend runs safely!"));
     }
 
     function connect() {
         stompClient = Stomp.over(new SockJS(WS_URL));
-        stompClient.connect({}, () => console.log('Connected to WS'));
+        stompClient.connect({}, () => console.log('Connected to WebSocket server.'));
     }
 
     function createRoom() {
@@ -170,6 +195,20 @@
         currentSubscription = stompClient.subscribe('/topic/' + roomId, (messagePayload) => {
             handleIncomingPayload(messagePayload);
         });
+
+        stompClient.subscribe('/topic/' + roomId + '/user/' + currentPlayer.id, (messagePayload) => {
+            const privateResponse = JSON.parse(messagePayload.body);
+
+            // Check if payload matches GuessResponseDTO
+            if (privateResponse.descriptionId !== undefined && privateResponse.correct !== undefined) {
+                handleGuessResponse(privateResponse);
+            }
+            // Check if payload matches GiveUpResponseDTO (Handled by TODO spec rule)
+            else if (privateResponse.giveUpTokenMarker !== undefined || privateResponse.movieName !== undefined) {
+                handleGiveUpRevealResponse(privateResponse);
+            }
+        });
+
         stompClient.send('/app/room.join/' + roomId, {}, JSON.stringify(currentPlayer));
     }
 
@@ -181,78 +220,74 @@
     function handleIncomingPayload(payload) {
         try {
             const data = JSON.parse(payload.body);
-
-            // 1. Detect if this is the combined phase payload wrap or a standalone state object
             let roomState = data.room ? data.room : data;
 
-            if (roomState && roomState.status) {
-                console.log("State synchronization broadcast received:", roomState.status);
+            if (roomState.status) {
+                if (roomState.players) {
+                    updateSidebarLeaderboard(roomState.players);
+                }
 
                 if (roomState.status === "WRITING") {
                     switchSubView('writing-sub-view');
-                    appendLogSystemMessage("System: Game started! Phase shifted to writing.");
                 }
                 else if (roomState.status === "GUESSING") {
-                    appendLogSystemMessage("System: All descriptions collected! Phase shifted to guessing.");
-
-                    // FORCE THE VIEW SWITCH FIRST so the screen changes instantly
                     switchSubView('guessing-sub-view');
-
-                    // Extract the descriptions list out of the wrapper payload object safely
                     if (data.descriptions) {
                         activeDescriptionsCached = data.descriptions;
                         displayGuessingCards();
-                    } else {
-                        console.warn("Guessing status received but no description array was attached to payload.");
                     }
+                }
+                else if (roomState.status === "RESULTS") {
+                    displayLeaderboardScreen(roomState.players);
                 }
                 return;
             }
-
-            // Handle regular chat text messages
             appendLogText((data.user || "System") + ": " + (data.message || ""));
-
         } catch(e) {
-            // Fallback for raw text frames printed directly out of the messaging template channel
-            console.log("Parsing fallback for text frame:", payload.body);
-
-            // If the server sends a raw system notification line, just log it cleanly
             appendLogText("System: " + payload.body);
         }
     }
 
-    // Renders only descriptions written by OTHER players
+    function updateSidebarLeaderboard(playersList) {
+        playersList.sort((a, b) => b.score - a.score);
+        const entries = document.getElementById('scoreboard-entries');
+        entries.innerHTML = playersList.map(p =>
+            `<div>• <strong>${p.username}</strong>: ${p.score} pts</div>`
+        ).join('');
+    }
+
     function displayGuessingCards() {
-        switchSubView('guessing-sub-view');
         const container = document.getElementById('descriptions-container');
         container.innerHTML = "";
 
-        // FRONTEND FILTERING LOGIC: Filter out your own description entries
-        const filteredList = activeDescriptionsCached.filter(item => item.playerId !== currentPlayer.uuid);
+        const filteredList = activeDescriptionsCached.filter(item => item.playerId !== currentPlayer.id);
+        totalCardsToGuessCount = filteredList.length;
+        resolvedCardsCount = 0;
 
-        if (filteredList.length === 0) {
-            container.innerHTML = "<p style='color:#888;'>No opponent descriptions available to guess.</p>";
+        if (totalCardsToGuessCount === 0) {
+            switchSubView('waiting-sub-view');
             return;
         }
 
         filteredList.forEach(item => {
             const card = document.createElement('div');
             card.className = 'description-card';
-            // Pass the explicit string ID dynamically to this instance drawer context
+            card.id = `card-container-${item.id}`;
             card.onclick = () => toggleGuessDrawer(item.id);
 
             card.innerHTML = `
-            <p><strong>Description Prompt:</strong> "${item.description}"</p>
-            <div class="guess-drawer" id="drawer-${item.id}" onclick="event.stopPropagation();" style="display:none;">
-                <label><strong>Search & Match Movie Answer:</strong></label>
-                <div class="search-container">
-                    <input type="text" id="guess-search-${item.id}" placeholder="Type to search movie details..." autocomplete="off">
-                    <ul id="guess-results-${item.id}" class="results-list"></ul>
+                <p><strong>Description Prompt:</strong> "${item.description}"</p>
+                <div class="guess-drawer" id="drawer-${item.id}" onclick="event.stopPropagation();" style="display:none;">
+                    <label><strong>Search & Select Movie Guess:</strong></label>
+                    <div class="search-container">
+                        <input type="text" id="guess-search-${item.id}" placeholder="Type movie name to search..." autocomplete="off">
+                        <ul id="guess-results-${item.id}" class="results-list"></ul>
+                    </div>
+                    <br>
+                    <button style="background:#00BFFF; color:white; border:none; padding:8px 12px; cursor:pointer;" onclick="submitGuess('${item.id}')">Submit Guess Choice</button>
+                    <button style="background:#FF007A; color:white; border:none; padding:8px 12px; cursor:pointer; margin-left:10px;" onclick="triggerGiveUp('${item.id}')">Give Up</button>
                 </div>
-                <br>
-                <button style="background:#00BFFF; color:white; border:none; padding:8px 12px; cursor:pointer;" onclick="submitGuess('${item.id}')">Submit Choice</button>
-            </div>
-        `;
+            `;
             container.appendChild(card);
             setupInlineCardSearch(item.id);
         });
@@ -260,11 +295,12 @@
 
     function toggleGuessDrawer(id) {
         const drawer = document.getElementById(`drawer-${id}`);
-        drawer.style.display = (drawer.style.display === 'block') ? 'none' : 'block';
+        if(drawer) {
+            drawer.style.display = (drawer.style.display === 'block') ? 'none' : 'block';
+        }
     }
 
     function setupInlineCardSearch(id) {
-        // Correctly isolate references inside elements belonging strictly to this loop block ID context
         const input = document.getElementById(`guess-search-${id}`);
         const results = document.getElementById(`guess-results-${id}`);
         let timer;
@@ -279,18 +315,13 @@
                     .then(res => res.json())
                     .then(movies => {
                         results.innerHTML = '';
-                        if(movies.length === 0) {
-                            results.style.display = 'none';
-                            return;
-                        }
+                        if(movies.length === 0) { results.style.display = 'none'; return; }
 
                         movies.forEach(m => {
                             const li = document.createElement('li');
-                            li.innerHTML = `<img src="${m.movieUrl || 'https://placehold.co/40x60'}" style="width:40px;height:60px;"><span class="movie-title">${m.name}</span>`;
-
-                            // Handle localized click assignments securely
-                            li.onclick = (event) => {
-                                event.stopPropagation();
+                            li.innerHTML = `<img src="${m.movieUrl || 'https://placehold.co/40x60'}"><span class="movie-title">${m.name}</span>`;
+                            li.onclick = (ev) => {
+                                ev.stopPropagation();
                                 input.value = m.name;
                                 selectedGuessData[id] = { movieId: m.id, movieName: m.name };
                                 results.innerHTML = '';
@@ -303,7 +334,6 @@
             }, 300);
         });
 
-        // Prevent random outside window document clicks from breaking this dynamic active field instance context layout
         document.addEventListener('click', (e) => {
             if (e.target !== input && e.target !== results) {
                 results.style.display = 'none';
@@ -313,29 +343,122 @@
 
     function submitGuess(descriptionId) {
         const choice = selectedGuessData[descriptionId];
-        if (!choice) return alert("Please select a movie option from the dropdown search first!");
+        if (!choice) return alert("Pick a movie out of the live dropdown list context first!");
 
         if (stompClient && stompClient.connected) {
             stompClient.send('/app/room.guess-submit/' + activeRoomId, {}, JSON.stringify({
-                guessingPlayerId: currentPlayer.uuid,
+                playerId: currentPlayer.id,
                 descriptionId: descriptionId,
                 guessedMovieId: choice.movieId
             }));
-
-            // Instantly transition local screen layout to structural waiting window
-            switchSubView('waiting-sub-view');
         }
+    }
+
+    function handleGuessResponse(result) {
+        const card = document.getElementById(`card-container-${result.descriptionId}`);
+        if (!card) return;
+
+        if (result.correct) {
+            // Disable element interaction layout cleanly
+            card.onclick = null;
+            card.style.cursor = "default";
+            card.style.borderLeft = "5px solid #32CD32";
+            card.style.background = "#eef9ee";
+
+            card.innerHTML = `
+                <div class="revealed-flex">
+                    <img class="revealed-img" src="${result.movieUrl || 'https://placehold.co/50x75?text=Solved'}">
+                    <div>
+                        <p style="color:#28a745; font-weight:bold; margin:0 0 5px 0;">✓ Correctly Solved!</p>
+                        <h4 style="margin:0; color:#333;">Movie: ${result.movieName}</h4>
+                        <p style="margin:5px 0 0 0; font-size:13px; color:#666;">${result.movieDescription || 'No description provided.'}</p>
+                    </div>
+                </div>
+            `;
+
+            checkLocalResolutionProgress();
+        } else {
+            card.style.borderLeft = "5px solid #FF007A";
+            alert("Wrong choice target! Review description details and try another option.");
+            setTimeout(() => { card.style.borderLeft = "5px solid #00BFFF"; }, 1500);
+        }
+    }
+
+    function triggerGiveUp(descriptionId) {
+        console.log("TODO: Player decided to surrender checking card option: ", descriptionId);
+
+        // BACKEND TODO: Create destination endpoint route mapping listener for this path
+        if (stompClient && stompClient.connected) {
+            stompClient.send('/app/room.guess-giveup/' + activeRoomId, {}, JSON.stringify({
+                playerId: currentPlayer.id,
+                descriptionId: descriptionId
+            }));
+        }
+    }
+
+    function handleGiveUpRevealResponse(result) {
+        const card = document.getElementById(`card-container-${result.descriptionId}`);
+        if (!card) return;
+
+        // Permanently lock out interaction
+        card.onclick = null;
+        card.style.cursor = "default";
+        card.style.borderLeft = "5px solid #666";
+        card.style.background = "#f0f0f0";
+
+        card.innerHTML = `
+            <div class="revealed-flex" style="opacity: 0.7;">
+                <img class="revealed-img" src="${result.movieUrl || 'https://placehold.co/50x75?text=GivenUp'}">
+                <div>
+                    <p style="color:#FF007A; font-weight:bold; margin:0 0 5px 0;">❌ Given Up</p>
+                    <h4 style="margin:0; color:#333;">Answer: ${result.movieName}</h4>
+                    <p style="margin:5px 0 0 0; font-size:13px; color:#666;">${result.movieDescription || 'Solution bypassed by client choice.'}</p>
+                </div>
+            </div>
+        `;
+
+        checkLocalResolutionProgress();
+    }
+
+    function checkLocalResolutionProgress() {
+        resolvedCardsCount++;
+        if (resolvedCardsCount >= totalCardsToGuessCount) {
+            switchSubView('waiting-sub-view');
+            console.log("Local completion tracked. Shifting display to loading stand-by panel.");
+        }
+    }
+
+    function displayLeaderboardScreen(playersList) {
+        switchSubView('results-sub-view');
+        const container = document.getElementById('leaderboard-container');
+        container.innerHTML = "";
+
+        playersList.sort((a, b) => b.score - a.score);
+
+        playersList.forEach((player, index) => {
+            const row = document.createElement('div');
+            row.style.padding = "12px";
+            row.style.margin = "8px 0";
+            row.style.background = (index === 0) ? "#eef9ee" : "#fff";
+            row.style.border = "1px solid #ddd";
+            row.style.borderLeft = (index === 0) ? "5px solid #32CD32" : "5px solid #666";
+            row.style.borderRadius = "4px";
+            row.style.fontWeight = "bold";
+
+            row.innerHTML = `Rank #${index + 1}: ${player.username} — 🏆 ${player.score} Points`;
+            container.appendChild(row);
+        });
     }
 
     function submitDescription() {
         const descText = document.getElementById('bad-description').value.trim();
-        if (!selectedMovieData.id || !descText) return alert("Supply movie target and prompt description text!");
+        if (!selectedMovieData.id || !descText) return alert("Select a movie and input text description elements first!");
 
         const payload = {
             id: null,
             movieId: selectedMovieData.id,
             movieName: selectedMovieData.name,
-            playerId: currentPlayer.uuid,
+            playerId: currentPlayer.id,
             playerUsername: currentPlayer.username,
             description: descText
         };
@@ -345,8 +468,6 @@
             document.getElementById('bad-description').value = "";
             document.getElementById('movie-search').value = "";
             selectedMovieData = { id: null, name: "" };
-
-            // Instantly transition layout to waiting screen representation
             switchSubView('waiting-sub-view');
         }
     }
@@ -370,11 +491,10 @@
     function sendMessage() {
         const txt = document.getElementById('message').value.trim();
         if (!txt || !activeRoomId) return;
-        stompClient.send('/app/send/' + activeRoomId, {}, JSON.stringify({ user: currentPlayer.username, userId: currentPlayer.uuid, message: txt }));
+        stompClient.send('/app/send/' + activeRoomId, {}, JSON.stringify({ user: currentPlayer.username, userId: currentPlayer.id, message: txt }));
         document.getElementById('message').value = "";
     }
 
-    // Global main layout search block configuration hooks
     const mainSearch = document.getElementById('movie-search');
     const mainResults = document.getElementById('search-results');
     let mainTimer;

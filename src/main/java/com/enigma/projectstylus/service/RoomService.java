@@ -2,16 +2,12 @@ package com.enigma.projectstylus.service;
 
 import com.enigma.projectstylus.RoomStatus;
 import com.enigma.projectstylus.dto.DescriptionDTO;
-import com.enigma.projectstylus.dto.GuessingPhasePayload;
-import com.enigma.projectstylus.dto.RoomJoinResponse;
+import com.enigma.projectstylus.dto.GuessingPhaseInitPayload;
 import com.enigma.projectstylus.model.Description;
 import com.enigma.projectstylus.model.GameRoom;
 import com.enigma.projectstylus.model.Player;
 import com.enigma.projectstylus.service.redis.RedisDescriptionService;
 import com.enigma.projectstylus.service.redis.RedisRoomService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -90,7 +86,7 @@ public class RoomService {
 
         if (room.getPlayers() != null) {
             for (Player p : room.getPlayers()) {
-                if (p.getUuid().equals(description.getPlayerId())) {
+                if (p.getId().equals(description.getPlayerId())) {
                     p.setHasSubmitted(true);
                 }
             }
@@ -121,7 +117,7 @@ public class RoomService {
         List<DescriptionDTO> randomizedDescriptions = new ArrayList<>(descriptionService.getAllDescriptions(roomId));
         Collections.shuffle(randomizedDescriptions);
 
-        GuessingPhasePayload payload = new GuessingPhasePayload(room, randomizedDescriptions);
+        GuessingPhaseInitPayload payload = new GuessingPhaseInitPayload(room, randomizedDescriptions);
         simpMessagingTemplate.convertAndSend("/topic/" + roomId, payload);
     }
 }
