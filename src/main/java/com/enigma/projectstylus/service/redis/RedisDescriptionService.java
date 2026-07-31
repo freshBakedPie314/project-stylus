@@ -22,6 +22,11 @@ public class RedisDescriptionService {
         descriptionRedisTemplate.expire(key, 5, TimeUnit.MINUTES);
     }
 
+    public void clearDescription(String roomId) {
+        String key = KEY_PREFIX + roomId;
+        descriptionRedisTemplate.delete(key);
+    }
+
     public List<Description> fetchAllDescriptions(String roomId) {
         String key = KEY_PREFIX + roomId;
         List<Description> descriptions = descriptionRedisTemplate.opsForList().range(key, 0, -1);

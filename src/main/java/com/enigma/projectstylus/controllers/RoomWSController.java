@@ -67,4 +67,9 @@ public class RoomWSController {
         List<Description> revealedAnswers = giveUpService.giveUp(roomId, giveUpDTO);
         simpMessagingTemplate.convertAndSend("/topic/" + roomId + "/user/" + giveUpDTO.getUserId(), revealedAnswers);
     }
+
+    @MessageMapping("/room.reset/{roomId}")
+    public void resset(@DestinationVariable String roomId) {
+        roomService.resetRoom(roomId);
+    }
 }

@@ -12,10 +12,7 @@ import com.enigma.projectstylus.service.redis.RedisRoomService;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 public class RoomService {
@@ -133,5 +130,37 @@ public class RoomService {
         List<Description> descriptions = redisDescriptionService.fetchAllDescriptions(roomId);
         LeaderboardPhasePayload payload = new LeaderboardPhasePayload(room, descriptions);
         simpMessagingTemplate.convertAndSend("/topic/" + roomId, payload);
+    }
+
+    public void resetRoom(String roomId) {
+
+        synchronized (roomId.intern())
+        {
+            GameRoom room = redisRoomService.getRoom(roomId);
+            if (room == null) {
+                throw new IllegalArgumentException("Room not found");
+            }
+
+            room.setStatus(RoomStatus.LOBBY);
+            room.setTotalDone(0L);
+
+            redisDescriptionService.clearDescription(roomId);
+
+            if (room.getPlayers() != null) {
+                for (Player player : room.getPlayers()) {
+                    player.setScore(0L);
+                    player.setHasSubmitted(false);
+                    player.setTotalGuessed(0L);
+                }
+            }
+
+            redisRoomService.saveRoom(room);
+            simpMessagingTemplate.convertAndSend("/topic/" + roomId, room);
+            Map<String, Object> logMessage = Map.of(
+                    "user", "System",
+                    "message", "The match has been reset by the host. Welcome back to the lobby!"
+            );
+            simpMessagingTemplate.convertAndSend("/topic/" + roomId, (Object) logMessage);
+        }
     }
 }
