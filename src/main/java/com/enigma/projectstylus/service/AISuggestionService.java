@@ -23,7 +23,7 @@ public class AISuggestionService {
     private final SimpMessagingTemplate messagingTemplate;
 
     // gemini-2.5-flash
-    private final String BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+    private final String BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
     public AISuggestionService(ObjectMapper objectMapper, SimpMessagingTemplate messagingTemplate) {
         this.restClient = RestClient.create();
         this.objectMapper = objectMapper;

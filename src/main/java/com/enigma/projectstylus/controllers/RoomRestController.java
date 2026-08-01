@@ -3,6 +3,7 @@ package com.enigma.projectstylus.controllers;
 import com.enigma.projectstylus.dto.DescriptionDTO;
 import com.enigma.projectstylus.dto.GuessDTO;
 import com.enigma.projectstylus.dto.GuessResponseDTO;
+import com.enigma.projectstylus.dto.RoomCreatioonPayload;
 import com.enigma.projectstylus.service.DescriptionService;
 import com.enigma.projectstylus.service.RoomService;
 import org.springframework.http.ResponseEntity;
@@ -23,8 +24,8 @@ public class RoomRestController {
     }
 
     @PostMapping("/create")
-    public ResponseEntity<String> createRoom() {
-        String roomId = roomService.createRoom();
+    public ResponseEntity<String> createRoom(@RequestBody RoomCreatioonPayload roomCreatioonPayload) {
+        String roomId = roomService.createRoom(roomCreatioonPayload);
         return ResponseEntity.ok(roomId);
     }
 

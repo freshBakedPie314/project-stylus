@@ -49,19 +49,16 @@ public class GuessService {
 
             if (room != null && room.getPlayers() != null) {
                 room.getPlayers().forEach(player -> {
-                    if (player.getId().equals(guess.getPlayerId()))
-                    {
+                    if (player.getId().equals(guess.getPlayerId())) {
                         long currentGuessed = (player.getTotalGuessed() != null) ? player.getTotalGuessed() : 0;
                         player.setScore(player.getScore() + 100);
                         player.setTotalGuessed(currentGuessed + 1);
 
-                        if (player.getTotalGuessed() == room.getPlayers().size() - 1)
-                        {
+                        if (player.getTotalGuessed() == room.getPlayers().size() - 1) {
                             long currentDone = (room.getTotalDone() != null) ? room.getTotalDone() : 0L;
                             room.setTotalDone(currentDone + 1L);
                         }
-                    } else if (player.getId().equals(descriptionToCheck.getPlayerId()))
-                    {
+                    } else if (player.getId().equals(descriptionToCheck.getPlayerId())) {
                         player.setScore(player.getScore() + 50);
                     }
                 });
@@ -72,8 +69,7 @@ public class GuessService {
                 simpMessagingTemplate.convertAndSend("/topic/" + roomId, room);
             }
 
-            if(room.getTotalDone() == room.getPlayers().size())
-            {
+            if (room.getTotalDone() == room.getPlayers().size()) {
                 roomService.endGame(roomId);
             }
             return GuessResponseDTO.builder()
@@ -82,8 +78,16 @@ public class GuessService {
                     .movieDescription(descriptionToCheck.getDescription())
                     .movieName(descriptionToCheck.getMovieName())
                     .build();
-        } else
-        {
+        } else {
+            GameRoom room = redisRoomService.getRoom(roomId);
+            room.getPlayers().forEach(player -> {
+                if (player.getId().equals(guess.getPlayerId())) {
+                    player.setScore(player.getScore() - 25);
+                }
+            });
+
+            redisRoomService.saveRoom(room);
+            simpMessagingTemplate.convertAndSend("/topic/" + roomId, room);
             return GuessResponseDTO.builder()
                     .correct(false)
                     .descriptionId(descriptionToCheck.getId())

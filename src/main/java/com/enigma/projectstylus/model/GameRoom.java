@@ -20,4 +20,9 @@ public class GameRoom {
     private RoomStatus status;
     private List<Player> players;
     private Long totalDone;
+
+    private int writingLimit = 60;
+    private int guessingLimit = 60;
+
+    private Long phaseEndTime;
 }

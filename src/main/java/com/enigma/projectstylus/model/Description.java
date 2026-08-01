@@ -1,5 +1,6 @@
 package com.enigma.projectstylus.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,6 +12,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Description {
     private UUID id;
     public Long movieId;
@@ -18,4 +20,5 @@ public class Description {
     public UUID playerId;
     public String playerUsername;
     public String description;
+    public String movieUrl;
 }

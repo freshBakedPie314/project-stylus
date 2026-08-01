@@ -19,7 +19,7 @@ public class RedisDescriptionService {
     public void addDescription(String roomId, Description description) {
         String key = KEY_PREFIX + roomId;
         descriptionRedisTemplate.opsForList().rightPush(key, description);
-        descriptionRedisTemplate.expire(key, 5, TimeUnit.MINUTES);
+        descriptionRedisTemplate.expire(key, 10, TimeUnit.MINUTES);
     }
 
     public void clearDescription(String roomId) {
