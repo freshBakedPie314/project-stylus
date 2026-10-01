@@ -79,6 +79,13 @@ public class RoomService {
     public void startGame(String roomId) {
         GameRoom room = redisRoomService.getRoom(roomId);
         if (room != null) {
+
+            if(room.getPlayers().size() <= 1)
+            {
+                simpMessagingTemplate.convertAndSend("/topic/" + roomId, room);
+                simpMessagingTemplate.convertAndSend("/topic/" + roomId, "Can't start game with just 1 player");
+                return;
+            }
             room.setStatus(RoomStatus.WRITING);
 
             // Calculate end time of Writing phase
