@@ -1,6 +1,7 @@
 package com.enigma.projectstylus.config;
 
 import com.enigma.projectstylus.dto.daily.DailyPuzzleDTO;
+import com.enigma.projectstylus.dto.daily.DailyPuzzleTmdbResponseDTO;
 import com.enigma.projectstylus.model.Description;
 import com.enigma.projectstylus.model.GameRoom;
 import org.springframework.context.annotation.Bean;
@@ -9,8 +10,6 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
-
-import java.time.LocalDate;
 
 @Configuration
 public class RedisConfig {

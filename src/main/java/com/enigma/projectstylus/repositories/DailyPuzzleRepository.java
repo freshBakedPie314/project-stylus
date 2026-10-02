@@ -1,7 +1,6 @@
 package com.enigma.projectstylus.repositories;
 
 
-import com.enigma.projectstylus.dto.daily.DailyPuzzleDTO;
 import com.enigma.projectstylus.model.DailyPuzzles;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

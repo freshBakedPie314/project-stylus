@@ -6,14 +6,13 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
 import java.util.List;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class DailyPuzzleDTO {
+public class DailyPuzzleTmdbResponseDTO {
     private Long id;
     private String title;
     private String overview;
@@ -25,13 +24,9 @@ public class DailyPuzzleDTO {
     private CreditsDTO credits;
 
     @Data
-    private static class GenreDTO{
+    public static class GenreDTO{
         private Integer id;
         private String name;
-    }
-
-    public String getFullPosterUrl() {
-        return posterPath != null ? "https://image.tmdb.org/t/p/w500" + posterPath : null;
     }
 
     @Data

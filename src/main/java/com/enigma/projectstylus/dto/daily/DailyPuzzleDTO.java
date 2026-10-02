@@ -7,12 +7,13 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class DailyPuzzleTmdbResponseDTO {
+public class DailyPuzzleDTO {
     private Long id;
     private String title;
     private String overview;
@@ -23,9 +24,12 @@ public class DailyPuzzleTmdbResponseDTO {
     private List<GenreDTO> genres;
     private CreditsDTO credits;
 
+    private List<CluesDTO> clues;
+    private Map<Integer, String> blurredPosterUrls;
+
+
     @Data
-    private static class GenreDTO{
-        private Integer id;
+    public static class GenreDTO{
         private String name;
     }
 
@@ -39,9 +43,56 @@ public class DailyPuzzleTmdbResponseDTO {
     }
 
     @Data
+
     public static class CastDto {
         private String name;
-        private String character;
+    }
+
+    @Data
+    public static class CluesDTO {
         private Integer order;
+        private String text;
+    }
+
+    public void fromDailyPuzzleTmdbResponseDTO(DailyPuzzleTmdbResponseDTO source) {
+        if (source == null)
+        {
+            return;
+        }
+
+        this.id = source.getId();
+        this.title = source.getTitle();
+        this.overview = source.getOverview();
+        this.posterPath = source.getPosterPath();
+
+        List<CastDto> castDtoList = List.of();
+        if (source.getCredits() != null && source.getCredits().getCast() != null)
+        {
+            castDtoList = source.getCredits().getCast().stream()
+                    .limit(3)
+                    .map(cast -> {
+                        CastDto curr = new CastDto();
+                        curr.setName(cast.getName());
+                        return curr;
+                    })
+                    .toList();
+        }
+
+        CreditsDTO creditsDTO = new CreditsDTO();
+        creditsDTO.setCast(castDtoList);
+        this.credits = creditsDTO;
+
+        List<GenreDTO>  genreDtoList = List.of();
+
+        if(source.getGenres() != null)
+        {
+            genreDtoList = source.getGenres().stream().limit(3)
+                    .map(genre -> {
+                        GenreDTO genreDTO = new GenreDTO();
+                        genreDTO.setName(genre.getName());
+                        return genreDTO;
+                    }).toList();
+        }
+        this.genres = genreDtoList;
     }
 }
