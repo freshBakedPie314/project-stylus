@@ -52,12 +52,12 @@ public class ImageBlurUtil {
 
     public static int getBlurRadiusForOrder(int order) {
         return switch (order) {
-            case 1 -> 22;
-            case 2 -> 16;
-            case 3 -> 12;
-            case 4 -> 9;
-            case 5 -> 7;
-            default -> 7;
+            case 1 -> 25;
+            case 2 -> 22;
+            case 3 -> 19;
+            case 4 -> 16;
+            case 5 -> 13;
+            default -> 13;
         };
     }
 }
