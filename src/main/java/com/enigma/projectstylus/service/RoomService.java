@@ -62,7 +62,14 @@ public class RoomService {
         // Update the room
         GameRoom room = redisRoomService.getRoom(roomId);
 
-        if (room != null) {
+        if (room == null)
+        {
+            simpMessagingTemplate.convertAndSend("/topic/" + roomId, "ERROR: Room not found");
+            return;
+        }
+
+        if (room != null)
+        {
             List<Player> activePlayers = room.getPlayers() != null
                     ? new ArrayList<>(room.getPlayers())
                     : new ArrayList<>();
@@ -72,7 +79,7 @@ public class RoomService {
 
             redisRoomService.saveRoom(room);
 
-            simpMessagingTemplate.convertAndSend("/topic/" + roomId, player.getUsername() + " Joined!!");
+            simpMessagingTemplate.convertAndSend("/topic/" + roomId, room);
         }
     }
 
