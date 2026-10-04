@@ -19,10 +19,6 @@ public class MovieController {
 
     @GetMapping("/search") // Corrected spelling from /serach to /search
     public ResponseEntity<List<MovieResponse>> get(@RequestParam String query) {
-        if (query == null || query.trim().length() <= 2) {
-            return ResponseEntity.badRequest().build();
-        }
-
         List<MovieResponse> movies = movieService.serachMoviesAndShows(query);
         return ResponseEntity.ok(movies);
     }
