@@ -1,6 +1,7 @@
 package com.enigma.projectstylus.model;
 
 import com.enigma.projectstylus.RoomStatus;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,6 +13,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class GameRoom {
     private static final long serialVersionUID = 1L;
 
@@ -25,4 +27,7 @@ public class GameRoom {
     private int guessingLimit = 60;
 
     private Long phaseEndTime;
+
+    // descriptions are only sent when joining in GUESSING phase
+    private List<Description> descriptions;
 }

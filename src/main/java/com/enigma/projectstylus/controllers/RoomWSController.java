@@ -39,6 +39,11 @@ public class RoomWSController {
         roomService.joinRoom(roomId, player);
     }
 
+    @MessageMapping("/room.leave/{roomId}")
+    public void leaveRoom(@DestinationVariable String roomId, @Payload Player player) {
+        roomService.leaveRoom(roomId, player);
+    }
+
     @MessageMapping("/room.start/{roomId}")
     public void startRoom(@DestinationVariable String roomId) {
         roomService.startGame(roomId);

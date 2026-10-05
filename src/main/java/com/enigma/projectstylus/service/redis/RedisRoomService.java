@@ -2,6 +2,7 @@ package com.enigma.projectstylus.service.redis;
 
 import com.enigma.projectstylus.model.GameRoom;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.types.Expiration;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.TimeUnit;
@@ -19,6 +20,12 @@ public class RedisRoomService {
     {
         String key = KEY_PREFIX + gameRoom.getRoomId();
         gameRoomRedisTemplate.opsForValue().set(key, gameRoom, 2, TimeUnit.HOURS);
+    }
+
+    public void updateRoom(GameRoom gameRoom)
+    {
+        String key = KEY_PREFIX + gameRoom.getRoomId();
+        gameRoomRedisTemplate.opsForValue().set(key, gameRoom, Expiration.keepTtl());
     }
 
     public GameRoom getRoom(String roomId)

@@ -76,10 +76,30 @@ public class RoomService {
 
             activePlayers.add(player);
             room.setPlayers(activePlayers);
-
+            if(room.getStatus().equals(RoomStatus.GUESSING))
+            {
+                List<Description> descriptionList = Collections.emptyList();
+                descriptionList = redisDescriptionService.fetchAllDescriptions(roomId);
+                room.setDescriptions(descriptionList);
+            }
             redisRoomService.saveRoom(room);
 
             simpMessagingTemplate.convertAndSend("/topic/" + roomId, room);
+        }
+    }
+
+    public void leaveRoom(String roomId, Player player)
+    {
+        GameRoom room = redisRoomService.getRoom(roomId);
+        if(room != null)
+        {
+            if(player != null)
+            {
+                room.getPlayers().remove(player);
+                redisRoomService.updateRoom(room);
+
+                simpMessagingTemplate.convertAndSend("/topic/" + roomId, room);
+            }
         }
     }
 
