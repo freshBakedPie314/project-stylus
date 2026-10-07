@@ -81,32 +81,7 @@ public class DailyPuzzleService {
             "Movie Title: {{movieTitle}}\n" +
             "Overview: {{movieOverview}}";
 
-    String payload = """
-            {
-              "contents": [{
-                "parts": [{"text": "%s"}]
-              }],
-              "generationConfig": {
-                "responseMimeType": "application/json",
-                "responseSchema": {
-                  "type": "OBJECT",
-                  "properties": {
-                    "clues": {
-                      "type": "ARRAY",
-                      "items": {
-                        "type": "OBJECT",
-                        "properties": {
-                          "order": { "type": "INTEGER" },
-                          "text": { "type": "STRING" }
-                        },
-                        "required": ["order", "text"]
-                      }
-                    }
-                  },
-                  "required": ["clues"]
-                }
-              }
-            }""";
+
 
 
     public DailyClueDTO getClueOrder(int order)
@@ -307,6 +282,33 @@ public class DailyPuzzleService {
     }
     public AiClueResponseDTO getClue(String movieName, String description)
     {
+        String payload = """
+            {
+              "contents": [{
+                "parts": [{"text": "%s"}]
+              }],
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "responseSchema": {
+                  "type": "OBJECT",
+                  "properties": {
+                    "clues": {
+                      "type": "ARRAY",
+                      "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                          "order": { "type": "INTEGER" },
+                          "text": { "type": "STRING" }
+                        },
+                        "required": ["order", "text"]
+                      }
+                    }
+                  },
+                  "required": ["clues"]
+                }
+              }
+            }""";
+
         String finalPrompt = prompt
                 .replace("{{movieTitle}}", movieName)
                 .replace("{{movieOverview}}", description);

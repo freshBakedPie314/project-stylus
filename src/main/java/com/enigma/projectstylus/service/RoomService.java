@@ -99,6 +99,19 @@ public class RoomService {
                 redisRoomService.updateRoom(room);
 
                 simpMessagingTemplate.convertAndSend("/topic/" + roomId, room);
+
+                if(room.getStatus().equals(RoomStatus.WRITING))
+                {
+                    List<Description> submissions = redisDescriptionService.fetchAllDescriptions(roomId);
+                    if (submissions.size() >= room.getPlayers().size() && !room.getPlayers().isEmpty())
+                    {
+                        startGuess(roomId);
+                    }
+                }
+                else if (room.getStatus() == RoomStatus.GUESSING)
+                {
+                    // checkIfGuessingIsDone(roomId);
+                }
             }
         }
     }
@@ -146,6 +159,8 @@ public class RoomService {
         // Send a minor notification frame that a submission was captured
         String notificationMsg = description.getPlayerUsername() + " has submitted their description! (" + submissions.size() + "/" + totalPlayers + ")";
         simpMessagingTemplate.convertAndSend("/topic/" + roomId, notificationMsg);
+
+        simpMessagingTemplate.convertAndSend("/topic/" + roomId, room);
 
         if (submissions.size() >= totalPlayers && totalPlayers > 0) {
             startGuess(roomId);
@@ -229,7 +244,7 @@ public class RoomService {
                 if (p.getHasSubmitted() == null || !p.getHasSubmitted()) {
                     penalizeTriggered = true;
 
-                    // Dock points (Allow scores to go negative for maximum public shame!)
+                    // Dock points
                     long currentScore = p.getScore() != null ? p.getScore() : 0L;
                     p.setScore(currentScore - 250L);
 
@@ -244,7 +259,7 @@ public class RoomService {
                     descriptionService.addDescription(roomId, dummyDesc);
                     p.setHasSubmitted(true);
 
-                    // Send a systemic public call-out to the chat/logs channel
+                    // Send a msg
                     Map<String, Object> logMessage = Map.of(
                             "user", "SYSTEM",
                             "message", "PSA: " + p.getUsername() + " failed to submit in time! Penalty applied: -250 points!"
