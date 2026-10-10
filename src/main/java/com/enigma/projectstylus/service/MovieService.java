@@ -101,7 +101,7 @@ public class MovieService {
 //    }
 
     @Cacheable(value = "movieSearches", key = "#query", unless = "#result == null")
-    public List<MovieResponse> serachMoviesAndShows(String query) {
+    public List<MovieResponse> serachMoviesAndShows(String query, int page) {
         // Cache miss
 
         //Get movies and shows and people
@@ -110,6 +110,7 @@ public class MovieService {
                         .queryParam("include_adult", "false")
                         .queryParam("language", "en-US")
                         .queryParam("query", query)
+                        .queryParam("page", page)
                         .build())
                 .retrieve()
                 .body(TDBDiscoverResponse.class);

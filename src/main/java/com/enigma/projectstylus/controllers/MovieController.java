@@ -17,9 +17,9 @@ public class MovieController {
         this.movieService = movieService;
     }
 
-    @GetMapping("/search") // Corrected spelling from /serach to /search
-    public ResponseEntity<List<MovieResponse>> get(@RequestParam String query) {
-        List<MovieResponse> movies = movieService.serachMoviesAndShows(query);
+    @GetMapping("/search/{page}") // Corrected spelling from /serach to /search
+    public ResponseEntity<List<MovieResponse>> get(@RequestParam String query,  @PathVariable int page) {
+        List<MovieResponse> movies = movieService.serachMoviesAndShows(query, page);
         return ResponseEntity.ok(movies);
     }
 
