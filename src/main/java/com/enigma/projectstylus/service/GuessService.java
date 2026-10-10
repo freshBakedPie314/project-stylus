@@ -4,6 +4,7 @@ import com.enigma.projectstylus.dto.GuessDTO;
 import com.enigma.projectstylus.dto.GuessResponseDTO;
 import com.enigma.projectstylus.model.Description;
 import com.enigma.projectstylus.model.GameRoom;
+import com.enigma.projectstylus.model.Player;
 import com.enigma.projectstylus.service.redis.RedisDescriptionService;
 import com.enigma.projectstylus.service.redis.RedisRoomService;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -34,7 +35,7 @@ public class GuessService {
 
         // Find the description safely
         Optional<Description> descriptionOpt = descriptionsInRoom.stream()
-                .filter(description -> description.getId().equals(guess.getDescriptionId())) // FIX: Used .equals()
+                .filter(description -> description.getId().equals(guess.getDescriptionId()))
                 .findFirst();
 
         if (descriptionOpt.isEmpty()) {
@@ -49,29 +50,24 @@ public class GuessService {
 
             if (room != null && room.getPlayers() != null) {
                 room.getPlayers().forEach(player -> {
-                    if (player.getId().equals(guess.getPlayerId())) {
+                    if (player.getId().equals(guess.getPlayerId()))
+                    {
+                        // Player's guess found
                         long currentGuessed = (player.getTotalGuessed() != null) ? player.getTotalGuessed() : 0;
                         player.setScore(player.getScore() + 100);
                         player.setTotalGuessed(currentGuessed + 1);
-
-                        if (player.getTotalGuessed() == room.getPlayers().size() - 1) {
-                            long currentDone = (room.getTotalDone() != null) ? room.getTotalDone() : 0L;
-                            room.setTotalDone(currentDone + 1L);
-                        }
                     } else if (player.getId().equals(descriptionToCheck.getPlayerId())) {
                         player.setScore(player.getScore() + 50);
                     }
                 });
 
                 redisRoomService.saveRoom(room);
+                checkIfGuessingIsDone(roomId);
 
                 // Broadcast updated room scores publicly to update the leaderboard live
                 simpMessagingTemplate.convertAndSend("/topic/" + roomId, room);
             }
 
-            if (room.getTotalDone() == room.getPlayers().size()) {
-                roomService.endGame(roomId);
-            }
             return GuessResponseDTO.builder()
                     .correct(true)
                     .descriptionId(descriptionToCheck.getId())
@@ -92,6 +88,35 @@ public class GuessService {
                     .correct(false)
                     .descriptionId(descriptionToCheck.getId())
                     .build();
+        }
+    }
+
+    public void checkIfGuessingIsDone(String roomId) {
+        GameRoom room =  redisRoomService.getRoom(roomId);
+        List<Description> descriptions = redisDescriptionService.fetchAllDescriptions(roomId);
+
+        if(room == null || descriptions.isEmpty() || room.getPlayers() == null) return ;
+
+        boolean everyoneDone = true;
+
+        for(Player player : room.getPlayers()) {
+
+            long ownDescriptionsCount = descriptions.stream()
+                    .filter(d -> d.getPlayerId().equals(player.getId()))
+                    .count();
+
+            long requiredGuesses = descriptions.size() - ownDescriptionsCount;
+            long guessed = (player.getTotalGuessed() != null) ? player.getTotalGuessed() : 0;
+
+            if(guessed < requiredGuesses)
+            {
+                everyoneDone = false;
+                break;
+            }
+        }
+
+        if(everyoneDone) {
+            roomService.endGame(roomId);
         }
     }
 }

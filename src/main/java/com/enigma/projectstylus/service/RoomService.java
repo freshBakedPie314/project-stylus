@@ -10,6 +10,7 @@ import com.enigma.projectstylus.model.GameRoom;
 import com.enigma.projectstylus.model.Player;
 import com.enigma.projectstylus.service.redis.RedisDescriptionService;
 import com.enigma.projectstylus.service.redis.RedisRoomService;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -25,15 +26,17 @@ public class RoomService {
     private final RedisDescriptionService redisDescriptionService;
     private final DescriptionService descriptionService;
     private final ScheduledExecutorService scheduler;
+    private final GuessService guessService;
 
     RoomService(SimpMessagingTemplate simpMessagingTemplate, RedisRoomService redisRoomService,
                 RedisDescriptionService redisDescriptionService, DescriptionService descriptionService,
-                ScheduledExecutorService scheduler) {
+                ScheduledExecutorService scheduler, @Lazy GuessService guessService) {
         this.simpMessagingTemplate = simpMessagingTemplate;
         this.redisRoomService = redisRoomService;
         this.redisDescriptionService = redisDescriptionService;
         this.descriptionService = descriptionService;
         this.scheduler = scheduler;
+        this.guessService = guessService;
     }
 
     public String createRoom(RoomCreatioonPayload roomCreatioonPayload)
@@ -95,7 +98,7 @@ public class RoomService {
         {
             if(player != null)
             {
-                room.getPlayers().remove(player);
+                room.getPlayers().removeIf(p -> p.getId().equals(player.getId()));
                 redisRoomService.updateRoom(room);
 
                 simpMessagingTemplate.convertAndSend("/topic/" + roomId, room);
@@ -110,11 +113,13 @@ public class RoomService {
                 }
                 else if (room.getStatus() == RoomStatus.GUESSING)
                 {
-                    // checkIfGuessingIsDone(roomId);
+                     guessService.checkIfGuessingIsDone(roomId);
                 }
             }
         }
     }
+
+
 
     public void startGame(String roomId) {
         GameRoom room = redisRoomService.getRoom(roomId);

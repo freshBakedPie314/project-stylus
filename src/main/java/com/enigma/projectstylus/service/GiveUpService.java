@@ -21,12 +21,14 @@ public class GiveUpService {
     private final RedisDescriptionService redisDescriptionService;
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final RoomService roomService;
+    private final GuessService guessService;
 
-    GiveUpService(RedisRoomService redisRoomService, RedisDescriptionService redisDescriptionService, SimpMessagingTemplate simpMessagingTemplate, RoomService roomService) {
+    GiveUpService(RedisRoomService redisRoomService, RedisDescriptionService redisDescriptionService, SimpMessagingTemplate simpMessagingTemplate, RoomService roomService, GuessService guessService) {
         this.redisRoomService = redisRoomService;
         this.redisDescriptionService = redisDescriptionService;
         this.simpMessagingTemplate = simpMessagingTemplate;
         this.roomService = roomService;
+        this.guessService = guessService;
     }
 
     public List<Description> giveUp(String roomId, GiveUpDTO giveUpDTO) {
@@ -39,6 +41,7 @@ public class GiveUpService {
         // Update room done value
         long currentDone = (room.getTotalDone() != null) ? room.getTotalDone() : 0L;
         room.setTotalDone(currentDone + 1L);
+        giveUpPlayer.setTotalGuessed(999L);
         redisRoomService.saveRoom(room);
 
         // Broadcast message
@@ -52,6 +55,8 @@ public class GiveUpService {
         }
         else return List.of();
 
+
+
         // Fetch all movies
         List<Description> descriptionDTOList = redisDescriptionService.fetchAllDescriptions(roomId);
 
@@ -59,12 +64,8 @@ public class GiveUpService {
         descriptionDTOList.removeIf(
                 description -> description.getPlayerId().equals(giveUpPlayer.getId())
         );
+        guessService.checkIfGuessingIsDone(roomId);
 
-        // Check if this change updates game
-        if(room.getTotalDone() != null && room.getTotalDone() == room.getPlayers().size())
-        {
-            roomService.endGame(roomId);
-        }
         return descriptionDTOList;
     }
 }
