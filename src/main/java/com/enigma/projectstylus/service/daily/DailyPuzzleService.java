@@ -27,7 +27,7 @@ import java.util.Map;
 @Service
 public class DailyPuzzleService {
 
-    @Value("${gemini.api.key}")
+    @Value("${gemini.api.key.daily}")
     private String apiKey;
 
     // gemini-2.5-flash
